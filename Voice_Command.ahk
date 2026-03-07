@@ -92,6 +92,18 @@ global blnLogEnabled := true
 global blnListening := true
 global blnCommandsEnabled := true
 
+; Voice mode: sapi | vosk | whisper | pause
+global strVoiceMode := "sapi"
+global speakLanguage := "default"   ; default = English, special = LocalLanguage= from INI
+global strSpecialLanguage := ""     ; e.g. "nl" — read from INI at bridge startup
+
+; TCP Bridge (Winsock client)
+global intTcpSocket := 0
+global intBridgePid := 0
+global strTcpBuffer := ""
+global strTcpHost := "127.0.0.1"
+global intTcpPort := 7891
+
 ; Icon paths for listening state (system DLL icons)
 global strIconListening := "C:\WINDOWS\system32\aclui.dll"
 global intIconListeningNum := 4
@@ -102,9 +114,11 @@ global intIconNotListeningNum := 69
 global objStatusCircle := ""
 global intCircleSize := 30
 global intCircleMargin := 20
-global strColorListening := "0088FF"    ; Blue when listening
-global strColorNotListening := "FF0000" ; Red when not listening
-global strColorPaused := "FFA500"       ; Orange when paused
+global strColorListening := "0088FF"    ; Blue  — SAPI active
+global strColorNotListening := "FF0000" ; Red   — listening OFF (F1)
+global strColorPaused := "FFA500"       ; Orange — paused / SAPI commands off
+global strColorVosk := "00CC44"         ; Green  — Vosk mode
+global strColorWhisper := "9900CC"      ; Purple — Whisper mode (Phase 2)
 
 ; Command Manager GUI globals
 global objCmdManagerGui := ""
@@ -139,26 +153,14 @@ global strLangId := ''
 ; Logging Type (bitwise: 1=flow, 2=test, 4=error, 7=all)
 global intLoggingType := 0
 
-; Bridge / Mode
-global strVoiceMode := "sapi"           ; Current mode: sapi / vosk / whisper / pause
-global strSpeakLanguage := "default"    ; default=English, special=configured language
-global strBridgeLanguage := ""          ; Language code from INI (e.g. "nl")
-global intBridgeSocket := 0             ; Winsock socket handle
-global intBridgePid := 0               ; PID of bridge.py process
-global strBridgeBuffer := ""           ; Incoming TCP data buffer
-global intBridgeConnectAttempts := 0   ; Retry counter for connect
-
-; Additional StatusCircle colors (existing: strColorListening=Blue, strColorNotListening=Red, strColorPaused=Orange)
-global strColorVosk := "00CC00"         ; Green - Vosk mode
-global strColorWhisper := "9900CC"      ; Purple - Whisper mode
-
 ;============================================================
 ; INCLUDE MODULES (order matters!)
 ;============================================================
-#Include <General\Peep_v2>				; Library for displaying the contnts of AHK-vars
-#Include <Project\Voice_Command_UI>		; User Interface
-#Include <Project\Voice_Command_Utils>	; Utilities
-#Include <Project\Voice_Command_Core>	; Core SAPI engine
+#Include <General\Peep_v2>		; Library for displaying the contnts of AHK-vars
+#Include <Project\Voice_Command_UI>		; 2. SECOND: User Interface - uses Utils but not Core
+#Include <Project\Voice_Command_Utils>	; 1. FIRST: Utilities - no dependencies on other modules
+#Include <Project\Voice_Command_Bridge>	; 4. Bridge: TCP connection to Python voice bridge
+#Include <Project\Voice_Command_Core>		; 5. LAST: Core SAPI engine - uses Utils and UI functions
 
 ;============================================================
 ; INITIALIZATION
@@ -166,6 +168,13 @@ global strColorWhisper := "9900CC"      ; Purple - Whisper mode
 
 ; Load logging type from INI
 intLoggingType := Integer(IniRead(strIniFile, "Settings", "LoggingType", 0))
+
+; Load circle size from INI — minimum 50 enforced internally
+intCircleSize := Max(50, Integer(IniRead(strIniFile, "Gui", "intCircleSize", 50)))
+
+; Load default language from INI — EN starts in English, LL starts in local language
+if (IniRead(strIniFile, "Settings", "DefaultLanguage", "EN") = "LL")
+    speakLanguage := "special"
 
 ; Refresh the log-file each time the script is started
 if FileExist(strLogFile)
@@ -180,8 +189,8 @@ SetupTrayMenu()
 ; Initialize Voice Recognition
 InitializeVoiceRecognition()
 
-; Start Python Bridge (auto-connect with retry timer)
-BridgeStart()
+; Start Python bridge (auto-connect after SAPI is ready)
+BridgeInit()
 
 ;============================================================
 ; HOTKEYS
@@ -193,10 +202,10 @@ F1:: ToggleListening()
 ; F2 Hotkey - Show Command Manager GUI
 F2:: ShowCommandManagerGui()
 
-; F3 Hotkey - Toggle SAPI / Vosk mode
-F3:: ToggleModeVoskSapi()
+; F3 Hotkey - Toggle SAPI/Vosk mode
+F3:: ToggleVoskMode()
 
-; F4 Hotkey - Toggle speak language default / special
-F4:: ToggleSpeakLanguage()
+; F4 Hotkey - Toggle Vosk language (default/special)
+F4:: ToggleLanguage()
 
 ;================= End of VOICECOMMAND Entry Point =================

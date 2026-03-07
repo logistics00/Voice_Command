@@ -18,8 +18,6 @@ SetupTrayMenu() {
     A_TrayMenu.Add("Edit INI File", EditIniMenu)
     A_TrayMenu.Add()
     A_TrayMenu.Add("Toggle Listening (F1)", ToggleListeningMenu)
-    A_TrayMenu.Add("Toggle SAPI / Vosk (F3)", SwitchVoskSapiMenu)
-    A_TrayMenu.Add("Toggle Language (F4)", ToggleLanguageMenu)
     A_TrayMenu.Add("Toggle Logging", ToggleLoggingMenu)
     A_TrayMenu.Add()
     A_TrayMenu.Add("Exit", ExitMenu)
@@ -78,14 +76,6 @@ ToggleLoggingMenu(*) {
 ExitMenu(*) {
     LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
     CleanupVoice('User Exit', 0)
-}
-
-SwitchVoskSapiMenu(*) {
-    ToggleModeVoskSapi()
-}
-
-ToggleLanguageMenu(*) {
-    ToggleSpeakLanguage()
 }
 
 ;============================================================
@@ -153,42 +143,52 @@ ToggleListening() {
 ; STATUS CIRCLE OVERLAY
 ;============================================================
 
+/** @description GetStatusLabel - Return language label for Vosk/Whisper modes
+    @returns {string} - "EN", "NL", etc. when in Vosk/Whisper; "" otherwise */
+GetStatusLabel() {
+    global strVoiceMode, speakLanguage, strSpecialLanguage
+
+    if (strVoiceMode = "vosk" || strVoiceMode = "whisper") {
+        if (speakLanguage = "special" && strSpecialLanguage != "")
+            return StrUpper(strSpecialLanguage)
+        return "EN"
+    }
+    return ""
+}
+
+/** @description GetStatusColor - Return circle color for the current voice mode
+    @returns {string} - Hex color code without '#'
+    @details - strVoiceMode drives color: sapi=blue, vosk=green, whisper=purple, pause=orange
+             - blnListening=false overrides to red regardless of mode */
+GetStatusColor() {
+    global blnListening, blnCommandsEnabled, strVoiceMode
+    global strColorListening, strColorNotListening, strColorPaused, strColorVosk, strColorWhisper
+
+    if (!blnListening)
+        return strColorNotListening     ; Red — F1 listening OFF
+
+    switch strVoiceMode {
+        case "vosk":    return strColorVosk             ; Green
+        case "whisper": return strColorWhisper          ; Purple
+        case "pause":   return strColorPaused           ; Orange
+        default:        return blnCommandsEnabled ? strColorListening : strColorPaused
+    }
+}
+
 /** @description CreateStatusCircle - Create the visual status circle overlay window */
 CreateStatusCircle() {
     LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global objStatusCircle, blnListening, blnCommandsEnabled, strVoiceMode
-    global strColorListening, strColorNotListening, strColorPaused, strColorVosk, strColorWhisper
-    global intCircleSize, intCircleMargin
+    global objStatusCircle, intCircleSize, intCircleMargin
 
     ; Calculate position in upper right corner
     intXPos := A_ScreenWidth - intCircleMargin - (intCircleSize // 2)
     intYPos := intCircleMargin + (intCircleSize // 2)
 
-    strColor := GetStatusCircleColor()
-
-    objStatusCircle := ShowCircle(intCircleSize, strColor, intXPos, intYPos)
+    objStatusCircle := ShowCircle(intCircleSize, GetStatusColor(), intXPos, intYPos, GetStatusLabel())
     LogMsg(FFL(A_ThisFunc, A_LineNumber) . "Status circle created at " intXPos ", " intYPos, 2)
 }
 
-/** @description GetStatusCircleColor - Return the correct circle color for the current state
-    @returns {string} - Hex color code without '#' */
-GetStatusCircleColor() {
-    global blnListening, blnCommandsEnabled, strVoiceMode
-    global strColorListening, strColorNotListening, strColorPaused, strColorVosk, strColorWhisper
-
-    if !blnListening
-        return strColorNotListening   ; Red   - F1 listening OFF
-
-    switch strVoiceMode {
-        case "vosk":    return strColorVosk          ; Green  - Vosk active
-        case "whisper": return strColorWhisper        ; Purple - Whisper active
-        case "pause":   return strColorPaused         ; Orange - all recognition paused
-        default:                                       ; "sapi"
-            return blnCommandsEnabled ? strColorListening : strColorPaused
-    }
-}
-
-/** @description UpdateStatusCircle - Update status circle color when state changes */
+/** @description UpdateStatusCircle - Update status circle color when listening state changes */
 UpdateStatusCircle() {
     LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
     global objStatusCircle, intCircleSize, intCircleMargin
@@ -208,8 +208,8 @@ UpdateStatusCircle() {
     intXPos := A_ScreenWidth - intCircleMargin - (intCircleSize // 2)
     intYPos := intCircleMargin + (intCircleSize // 2)
 
-    ; Create the circle with new color
-    objStatusCircle := ShowCircle(intCircleSize, GetStatusCircleColor(), intXPos, intYPos)
+    ; Create the circle with new color and language label
+    objStatusCircle := ShowCircle(intCircleSize, GetStatusColor(), intXPos, intYPos, GetStatusLabel())
 }
 
 /** @description ShowCircle - Create and display a colored circle GUI element
@@ -217,8 +217,9 @@ UpdateStatusCircle() {
     @param {string} circleColor - Hex color code without '#'
     @param {integer} xPos - X coordinate for circle center
     @param {integer} yPos - Y coordinate for circle center
+    @param {string} strLabel - Optional language label drawn in center (e.g. "EN", "NL")
     @returns {object} - GUI object reference */
-ShowCircle(circleSize := 50, circleColor := "FF0000", xPos := "", yPos := "") {
+ShowCircle(circleSize := 50, circleColor := "FF0000", xPos := "", yPos := "", strLabel := "") {
     LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
     if (xPos = "") {
         xPos := A_ScreenWidth // 2
@@ -232,6 +233,15 @@ ShowCircle(circleSize := 50, circleColor := "FF0000", xPos := "", yPos := "") {
 
     objCircleGui := Gui("-Caption +AlwaysOnTop +ToolWindow -DPIScale")
     objCircleGui.BackColor := circleColor
+
+    if (strLabel != "") {
+        intFontSize := Max(8, circleSize // 4)
+        intFontHeight := Round(intFontSize * 96 / 72)
+        intYOffset := (circleSize - intFontHeight) // 2
+        objCircleGui.SetFont("s" intFontSize " Bold cFFFFFF")
+        objCircleGui.AddText("x0 y" intYOffset " w" circleSize " Center", strLabel)
+    }
+
     objCircleGui.Show("x" leftPos " y" topPos " w" circleSize " h" circleSize " NoActivate")
 
     hRegion := DllCall("CreateEllipticRgn",
