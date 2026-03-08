@@ -202,8 +202,8 @@ F1:: ToggleListening()
 ; F2 Hotkey - Show Command Manager GUI
 F2:: ShowCommandManagerGui()
 
-; F3 Hotkey - Toggle SAPI/Vosk mode
-F3:: ToggleVoskMode()
+; F3 Hotkey - Cycle voice mode: SAPI -> Vosk -> Whisper -> SAPI
+F3:: CycleVoiceMode()
 
 ; F4 Hotkey - Toggle Vosk language (default/special)
 F4:: ToggleLanguage()

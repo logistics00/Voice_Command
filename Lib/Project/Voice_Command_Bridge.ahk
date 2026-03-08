@@ -1,9 +1,9 @@
 ;================= VC_Bridge.ahk =================
 ; Python Bridge TCP Client for Voice Command
-; Handles: bridge startup, TCP connection, mode switching (SAPI/Vosk), language toggle
+; Handles: bridge startup, TCP connection, mode cycling (SAPI/Vosk/Whisper), language toggle
 ;
 ; Protocol (AHK -> Python):
-;   MODE:vosk | MODE:sapi | MODE:pause | LANG:default | LANG:special | QUIT
+;   MODE:vosk | MODE:whisper | MODE:sapi | MODE:pause | LANG:default | LANG:special | QUIT
 ; Protocol (Python -> AHK):
 ;   TEXT:<text> | STATUS:<msg> | ERROR:<msg>
 ;=================================================
@@ -11,6 +11,39 @@
 ;============================================================
 ; BRIDGE INITIALIZATION
 ;============================================================
+
+/** @description BridgeKillOrphan - Send QUIT to any bridge already listening on port 7891
+    @details Uses a raw Winsock connect; if successful sends QUIT and waits 800ms for shutdown. */
+BridgeKillOrphan() {
+    wsaData := Buffer(400, 0)
+    if (DllCall("ws2_32\WSAStartup", "UShort", 0x0202, "Ptr", wsaData, "Int") != 0)
+        return
+
+    hSock := DllCall("ws2_32\socket", "Int", 2, "Int", 1, "Int", 6, "Ptr")
+    if (hSock = -1) {
+        DllCall("ws2_32\WSACleanup")
+        return
+    }
+
+    sockAddr := Buffer(16, 0)
+    NumPut("UShort", 2,                                                            sockAddr, 0)
+    NumPut("UShort", DllCall("ws2_32\htons",    "UShort", 7891,        "UShort"), sockAddr, 2)
+    NumPut("UInt",   DllCall("ws2_32\inet_addr", "AStr",  "127.0.0.1", "UInt"),   sockAddr, 4)
+
+    if (DllCall("ws2_32\connect", "Ptr", hSock, "Ptr", sockAddr, "Int", 16, "Int") = 0) {
+        ; Something is listening — send QUIT so it shuts down cleanly
+        strQuit := "QUIT`n"
+        intBufSize := StrPut(strQuit, "UTF-8")
+        buf := Buffer(intBufSize, 0)
+        StrPut(strQuit, buf, "UTF-8")
+        DllCall("ws2_32\send", "Ptr", hSock, "Ptr", buf.Ptr, "Int", intBufSize - 1, "Int", 0)
+        LogMsg(FFL(A_ThisFunc, A_LineNumber) . "Sent QUIT to orphan bridge on port 7891", 2)
+        Sleep(800)
+    }
+
+    DllCall("ws2_32\closesocket", "Ptr", hSock)
+    DllCall("ws2_32\WSACleanup")
+}
 
 /** @description BridgeInit - Start Python bridge process and connect via TCP
     @details - Reads Language= from INI
@@ -31,6 +64,9 @@ BridgeInit() {
         MsgBox("Python bridge not found:`n" strBridgePath "`n`nVosk/Whisper unavailable.", "Bridge Missing", "Icon!")
         return
     }
+
+    ; Send QUIT to any orphan bridge already listening on port 7891
+    BridgeKillOrphan()
 
     ; Launch bridge process (hidden window, no console visible)
     try {
@@ -162,7 +198,10 @@ BridgeHandleMessage(strMsg) {
     } else if (SubStr(strMsg, 1, 7) = "STATUS:") {
         LogMsg(FFL(A_ThisFunc, A_LineNumber) . "Bridge status: " SubStr(strMsg, 8), 2)
     } else if (SubStr(strMsg, 1, 6) = "ERROR:") {
-        LogMsg(FFL(A_ThisFunc, A_LineNumber) . "Bridge error: " SubStr(strMsg, 7), 4)
+        strErr := SubStr(strMsg, 7)
+        LogMsg(FFL(A_ThisFunc, A_LineNumber) . "Bridge error: " strErr, 4)
+        ToolTip("Bridge: " strErr)
+        SetTimer(() => ToolTip(), -10000)
     }
 }
 
@@ -197,8 +236,8 @@ BridgeDisconnect() {
 ; MODE SWITCHING
 ;============================================================
 
-/** @description ToggleVoskMode - F3 handler: toggle between SAPI and Vosk mode */
-ToggleVoskMode() {
+/** @description CycleVoiceMode - F3 handler: cycle SAPI -> Vosk -> Whisper -> SAPI */
+CycleVoiceMode() {
     LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
     global strVoiceMode, blnListening, intTcpSocket
 
@@ -214,21 +253,25 @@ ToggleVoskMode() {
         return
     }
 
-    if (strVoiceMode = "sapi") {
-        SwitchToVosk()
-    } else if (strVoiceMode = "vosk") {
-        SwitchToSapi()
-    }
+    if (strVoiceMode = "sapi")
+	    SwitchToVosk()
+    else if (strVoiceMode = "vosk")
+		SwitchToWhisper()
+    else if (strVoiceMode = "whisper")
+		SwitchToSapi()
+    else if (strVoiceMode = "pause")
+		SwitchToSapi()
 }
 
 /** @description SwitchToVosk - Pause SAPI grammar and activate Vosk mode */
 SwitchToVosk() {
     LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global strVoiceMode, objGrammar
+    global strVoiceMode, objGrammar, objControlGrammar
 
-    ; Pause SAPI main grammar so mic is free for Python
+    ; Pause both SAPI grammars so mic is free for Python
     try {
         objGrammar.CmdSetRuleState("cmd", 0)
+        objControlGrammar.CmdSetRuleState("control", 0)
     }
 
     strVoiceMode := "vosk"
@@ -239,15 +282,39 @@ SwitchToVosk() {
     SetTimer(() => ToolTip(), -2000)
 }
 
-/** @description SwitchToSapi - Return from Vosk to SAPI mode and resume grammar */
+/** @description SwitchToWhisper - Pause SAPI grammar and activate Whisper dictation mode */
+SwitchToWhisper() {
+    LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
+    global strVoiceMode, objGrammar, objControlGrammar
+
+    ; Pause both SAPI grammars so mic is free for Python
+    try {
+        objGrammar.CmdSetRuleState("cmd", 0)
+        objControlGrammar.CmdSetRuleState("control", 0)
+    }
+
+    strVoiceMode := "whisper"
+    BridgeSend("MODE:whisper")
+    UpdateStatusCircle()
+    ToolTip("Mode: Whisper (dictation)")
+    LogMsg(FFL(A_ThisFunc, A_LineNumber) . "Switched to Whisper", 2)
+    SetTimer(() => ToolTip(), -2000)
+}
+
+/** @description SwitchToSapi - Return from Vosk/Whisper to SAPI mode and resume grammar */
 SwitchToSapi() {
     LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global strVoiceMode, objGrammar, blnCommandsEnabled
+    global strVoiceMode, objGrammar, objControlGrammar, blnCommandsEnabled, blnListening
 
     BridgeSend("MODE:sapi")
     strVoiceMode := "sapi"
 
-    ; Resume SAPI grammar if commands were enabled before the switch
+    ; Restore both grammars (control always restored; main only if commands were enabled)
+    if (blnListening) {
+        try {
+            objControlGrammar.CmdSetRuleState("control", 1)
+        }
+    }
     if (blnCommandsEnabled) {
         try {
             objGrammar.CmdSetRuleState("cmd", 1)

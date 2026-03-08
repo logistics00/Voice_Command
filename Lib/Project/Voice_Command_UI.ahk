@@ -74,6 +74,10 @@ ToggleLoggingMenu(*) {
 }
 
 ExitMenu(*) {
+    static blnExiting := false
+    if (blnExiting)
+        return
+    blnExiting := true
     LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
     CleanupVoice('User Exit', 0)
 }

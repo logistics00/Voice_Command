@@ -1,3 +1,6 @@
 vosk
 sounddevice
 psutil
+silero-vad
+faster-whisper
+torch

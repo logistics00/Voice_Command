@@ -35,10 +35,10 @@ Four modes, mutually exclusive:
 
 | Mode    | Who owns mic | StatusCircle color | Label in circle        | Description                    |
 | ------- | ------------ | ------------------ | ---------------------- | ------------------------------ |
-| SAPI    | SAPI (AHK)   | Blue               | —                      | Default — command recognition  |
+| SAPI    | SAPI (AHK)   | Blue               | —                     | Default — command recognition |
 | Vosk    | Python       | Green              | EN or LL (active lang) | Sentence recognition           |
 | Whisper | Python       | Purple             | EN or LL (active lang) | Dictation / longer speech      |
-| Pause   | None         | Orange             | —                      | All recognition suspended      |
+| Pause   | None         | Orange             | —                     | All recognition suspended      |
 
 **Switching rules:**
 
@@ -111,7 +111,7 @@ Four modes, mutually exclusive:
 - Model size: **auto-selected at bridge startup** based on available system RAM:
   - RAM ≥ 24GB → `medium` (more accurate, 3–8s per utterance on CPU)
   - RAM < 24GB → `small` (faster, 1–3s per utterance on CPU)
-  - Can be overridden manually via `Voice_Command.ini` key `WhisperModel=small|medium`
+  - Can be overridden manually via `Voice_Command.ini` key `whisperModel=small|medium`
   - Uses `psutil.virtual_memory().total` to detect RAM at runtime
 - Language support: multilingual by default — supports English, Dutch, German, and 99 others without separate models
 - Active language passed per transcription call from `LocalLanguage=` INI key (e.g. `LocalLanguage=nl`, `LocalLanguage=de`); omitted or empty defaults to English
@@ -196,6 +196,9 @@ VoiceApp/
 - AHK GUI: toggle Vosk ↔ Whisper, select language
 - StatusCircle: Whisper circle shows EN or NL label in center (same logic as Vosk)
 - Test: dictation in English and Dutch
+  Extra questions and their answers:
+  - F3 currently toggles SAPI ↔ Vosk. With Whisper it cycles: SAPI → Vosk → Whisper → SAPI
+  - INI key name for Whisper model: whisperModel=small|medium under [Settings]. Correct.
 
 ### Phase 3 — Integration with Existing SAPI System
 
@@ -217,21 +220,21 @@ VoiceApp/
 
 ## Resolved Decisions
 
-| Question                      | Decision                                                                                                  |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------- |
-| Mic conflict strategy         | Modes exclusive — SAPI paused when Python bridge is active                                                |
-| AHK→Python communication      | TCP socket (localhost:7891) — simple, reliable, bidirectional                                             |
-| Whisper speech trigger        | silero-vad — automatic end-of-utterance detection, no push-to-talk                                        |
-| Dutch language support        | Yes, from Phase 1 — both EN and NL Vosk models loaded at startup                                          |
-| Whisper engine                | faster-whisper (not whisper.cpp) — stays in Python, pip-installable                                       |
-| Single or dual Python process | Single process — loads both Vosk and Whisper models at startup                                            |
-| Auto-start Python bridge      | Yes — auto-start at AHK launch; Whisper model load time makes on-demand impractical                       |
-| Whisper model size            | Auto-selected at startup:`medium` if RAM ≥ 24GB, else `small`; overridable via `Voice_Command.ini`        |
-| Mode switching UI             | All three: hotkey, voice command (via SAPI), GUI button                                                   |
+| Question                      | Decision                                                                                                                                                                                                                                                                          |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Mic conflict strategy         | Modes exclusive — SAPI paused when Python bridge is active                                                                                                                                                                                                                       |
+| AHK→Python communication     | TCP socket (localhost:7891) — simple, reliable, bidirectional                                                                                                                                                                                                                    |
+| Whisper speech trigger        | silero-vad — automatic end-of-utterance detection, no push-to-talk                                                                                                                                                                                                               |
+| Dutch language support        | Yes, from Phase 1 — both EN and NL Vosk models loaded at startup                                                                                                                                                                                                                 |
+| Whisper engine                | faster-whisper (not whisper.cpp) — stays in Python, pip-installable                                                                                                                                                                                                              |
+| Single or dual Python process | Single process — loads both Vosk and Whisper models at startup                                                                                                                                                                                                                   |
+| Auto-start Python bridge      | Yes — auto-start at AHK launch; Whisper model load time makes on-demand impractical                                                                                                                                                                                              |
+| Whisper model size            | Auto-selected at startup:`medium` if RAM ≥ 24GB, else `small`; overridable via `Voice_Command.ini`                                                                                                                                                                         |
+| Mode switching UI             | All three: hotkey, voice command (via SAPI), GUI button                                                                                                                                                                                                                           |
 | Language selection            | Vosk: generic `models/vosk/ll/` folder — no language code needed. Whisper: `LocalLanguage=nl` in INI — explicit code required. `DefaultLanguage=EN\|LL` in INI sets startup language for both engines. `speakLanguage` AHK variable: `default` = EN, `special` = LL. |
-| StatusCircle states           | Extended to 4: SAPI (blue), Vosk (green), Whisper (purple), Pause (orange). Vosk and Whisper circles show a language label in the center: EN or LL (uppercase of active language). SAPI and Pause show no label. |
-| StatusCircle size             | Configurable via INI `[Gui] intCircleSize`; minimum 50 enforced internally — values below 50 are treated as 50. |
-| EN/NL label text color        | White (`FFFFFF`) — already in code; contrast-rich on green (Vosk) and purple (Whisper). No color change needed. |
+| StatusCircle states           | Extended to 4: SAPI (blue), Vosk (green), Whisper (purple), Pause (orange). Vosk and Whisper circles show a language label in the center: EN or LL (uppercase of active language). SAPI and Pause show no label.                                                                  |
+| StatusCircle size             | Configurable via INI `[Gui] intCircleSize`; minimum 50 enforced internally — values below 50 are treated as 50.                                                                                                                                                                |
+| EN/NL label text color        | White (`FFFFFF`) — already in code; contrast-rich on green (Vosk) and purple (Whisper). No color change needed.                                                                                                                                                                |
 
 ## What to Download and Install
 
@@ -316,10 +319,11 @@ VoiceApp/
   └──────────────────────┴───────────────────────────┴────────┘
 
 ## Questions before I code Phase 1:
-1.	The plan says "User can switch between languages via GUI/hotkey".
-    For Phase 1, is F3 to toggle SAPI↔Vosk enough, and a separate hotkey (e.g. F4) for language toggle (default↔special)? Or should the language switch be GUI-only for now?
-    Answer: Via F4
-2.	Should TEXT: results from Vosk be typed into the active window (like dictation), or just displayed in a tooltip + logged for now in Phase 1?
-    Answer: Typed into active window.
-3.	Do the Vosk model folders already exist, or should I add a check/warning when they're missing?
-    Answer: They have been setup.
+
+1. The plan says "User can switch between languages via GUI/hotkey".
+   For Phase 1, is F3 to toggle SAPI↔Vosk enough, and a separate hotkey (e.g. F4) for language toggle (default↔special)? Or should the language switch be GUI-only for now?
+   Answer: Via F4
+2. Should TEXT: results from Vosk be typed into the active window (like dictation), or just displayed in a tooltip + logged for now in Phase 1?
+   Answer: Typed into active window.
+3. Do the Vosk model folders already exist, or should I add a check/warning when they're missing?
+   Answer: They have been setup.
