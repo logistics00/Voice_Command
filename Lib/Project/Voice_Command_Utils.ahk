@@ -30,14 +30,14 @@ CreateDefaultIni() {
     global strIniFile
 
     try {
-        IniWrite("-1", strIniFile, "Settings", "MicrophoneIndex")
-        IniWrite("", strIniFile, "Settings", "MicrophoneName")
-        IniWrite("0", strIniFile, "Settings", "TestMode")
-        IniWrite("7", strIniFile, "Settings", "LoggingType")
-        IniWrite("40", strIniFile, "Settings", "ConfidenceThreshold")
-        IniWrite("1", strIniFile, "Settings", "ShowConfidence")
-        IniWrite("nl", strIniFile, "Settings", "LocalLanguage")
-        IniWrite("EN", strIniFile, "Settings", "DefaultLanguage")
+        IniWrite("-1", strIniFile, "Settings", "microphoneIndex")
+        IniWrite("", strIniFile, "Settings", "microphoneName")
+        IniWrite("0", strIniFile, "Settings", "testMode")
+        IniWrite("7", strIniFile, "Settings", "loggingType")
+        IniWrite("40", strIniFile, "Settings", "confidenceThreshold")
+        IniWrite("1", strIniFile, "Settings", "showConfidence")
+        IniWrite("nl", strIniFile, "Settings", "localLanguage")
+        IniWrite("EN", strIniFile, "Settings", "defaultLanguage")
 
         ; Sample commands
         IniWrite("General|MsgBox|Hello World!", strIniFile, "Commands", "hello")
@@ -93,10 +93,10 @@ LoadConfidenceSettings() {
     global strIniFile, fltConfidenceThreshold, blnShowConfidence
 
     try {
-        intThreshold := Integer(IniRead(strIniFile, "Settings", "ConfidenceThreshold", "40"))
+        intThreshold := Integer(IniRead(strIniFile, "Settings", "confidenceThreshold", "40"))
         fltConfidenceThreshold := intThreshold / 100
 
-        strShowConf := IniRead(strIniFile, "Settings", "ShowConfidence", "1")
+        strShowConf := IniRead(strIniFile, "Settings", "showConfidence", "1")
         blnShowConfidence := (strShowConf = "1")
 
         LogMsg(FFL(A_ThisFunc, A_LineNumber) . "Confidence Threshold: " intThreshold "%, Show: " (blnShowConfidence ? "ON" : "OFF"), 2)

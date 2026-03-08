@@ -53,7 +53,7 @@
 ;            Added function-comments following "Quasi"-JSDoc
 ;            Added F2 hotkey to show Command Manager GUI
 ;            Added refresh of logging file at start of script
-;            Changed LogEnabled => LoggingType to support different logging levels
+;            Changed logEnabled => loggingType to support different logging levels
 ;   v1.8.0-A - OPTIE A: Twee aparte grammars
 ;            - Control grammar (start/stop) blijft ALTIJD actief
 ;            - Main grammar wordt aan/uit gezet op basis van blnCommandsEnabled
@@ -94,7 +94,7 @@ global blnCommandsEnabled := true
 
 ; Voice mode: sapi | vosk | whisper | pause
 global strVoiceMode := "sapi"
-global speakLanguage := "default"   ; default = English, special = LocalLanguage= from INI
+global speakLanguage := "default"   ; default = English, special = localLanguage= from INI
 global strSpecialLanguage := ""     ; e.g. "nl" — read from INI at bridge startup
 
 ; TCP Bridge (Winsock client)
@@ -145,7 +145,7 @@ global fltConfidenceThreshold := 0.40
 global blnShowConfidence := true
 global objSliderThreshold := ""
 global objTxtThresholdValue := ""
-global objChkShowConfidence := ""
+global objChkshowConfidence := ""
 
 ; Dynamic SAPI language detection
 global strLangId := ''
@@ -167,13 +167,13 @@ global intLoggingType := 0
 ;============================================================
 
 ; Load logging type from INI
-intLoggingType := Integer(IniRead(strIniFile, "Settings", "LoggingType", 0))
+intLoggingType := Integer(IniRead(strIniFile, "Settings", "loggingType", 0))
 
 ; Load circle size from INI — minimum 50 enforced internally
 intCircleSize := Max(50, Integer(IniRead(strIniFile, "Gui", "intCircleSize", 50)))
 
 ; Load default language from INI — EN starts in English, LL starts in local language
-if (IniRead(strIniFile, "Settings", "DefaultLanguage", "EN") = "LL")
+if (IniRead(strIniFile, "Settings", "defaultLanguage", "EN") = "LL")
     speakLanguage := "special"
 
 ; Refresh the log-file each time the script is started

@@ -23,17 +23,17 @@ InitializeVoiceRecognition() {
             CreateDefaultIni()
         }
 
-        strLogSetting := IniRead(strIniFile, "Settings", "LogEnabled", "1")
+        strLogSetting := IniRead(strIniFile, "Settings", "logEnabled", "1")
 
         LogMsg(FFL(A_ThisFunc, A_LineNumber) . "=== Voice Command Starting (Option A: Dual Grammar) ===", 2)
-        LogMsg(FFL(A_ThisFunc, A_LineNumber) . "LogEnabled: " (blnLogEnabled ? "ON" : "OFF"), 2)
+        LogMsg(FFL(A_ThisFunc, A_LineNumber) . "logEnabled: " (blnLogEnabled ? "ON" : "OFF"), 2)
 
         ; Load confidence settings
         LoadConfidenceSettings()
 
         mapCommands := LoadCommandsFromIni()
 
-        intTestMode := Integer(IniRead(strIniFile, "Settings", "TestMode", "0"))
+        intTestMode := Integer(IniRead(strIniFile, "Settings", "testMode", "0"))
         LogMsg(FFL(A_ThisFunc, A_LineNumber) . "Test Mode: " (intTestMode ? "ON" : "OFF"), 2)
 
         if (!intTestMode && mapCommands.Count < 1) {
@@ -141,8 +141,8 @@ VerifyMicrophone() {
     global strIniFile, objRecognizer, intCurrentMicIndex, strCurrentMicName
 
     ; Read saved settings
-    intSavedIndex := Integer(IniRead(strIniFile, "Settings", "MicrophoneIndex", "-1"))
-    strSavedName := IniRead(strIniFile, "Settings", "MicrophoneName", "")
+    intSavedIndex := Integer(IniRead(strIniFile, "Settings", "microphoneIndex", "-1"))
+    strSavedName := IniRead(strIniFile, "Settings", "microphoneName", "")
 
     LogMsg(FFL(A_ThisFunc, A_LineNumber) . "Saved Index: " intSavedIndex ", Saved Name: " strSavedName, 2)
 
@@ -175,7 +175,7 @@ VerifyMicrophone() {
                 intCurrentMicIndex := intIdx
                 strCurrentMicName := strSavedName
                 ; Update saved index
-                IniWrite(intIdx, strIniFile, "Settings", "MicrophoneIndex")
+                IniWrite(intIdx, strIniFile, "Settings", "microphoneIndex")
                 LogMsg(FFL(A_ThisFunc, A_LineNumber) . "Found at new index: [" intIdx "] " strSavedName, 2)
                 return "OK"
             }

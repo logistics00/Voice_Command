@@ -66,7 +66,7 @@ ToggleLoggingMenu(*) {
     blnLogEnabled := !blnLogEnabled
 
     try {
-        IniWrite(blnLogEnabled ? "1" : "0", strIniFile, "Settings", "LogEnabled")
+        IniWrite(blnLogEnabled ? "1" : "0", strIniFile, "Settings", "logEnabled")
     }
 
     MsgBox("Logging is now " (blnLogEnabled ? "ON" : "OFF"), "Logging Toggle", "Iconi")
@@ -521,7 +521,7 @@ ShowMicrophoneSettingsGui(blnForceSelection := false) {
     global objMicSettingsGui, objLvMicrophones, objProgressLevel
     global objTxtLevelPercent, objTxtMicStatus, objTxtTestResult
     global objRecognizer, intCurrentMicIndex, strCurrentMicName
-    global objSliderThreshold, objTxtThresholdValue, objChkShowConfidence
+    global objSliderThreshold, objTxtThresholdValue, objChkshowConfidence
     global fltConfidenceThreshold, blnShowConfidence
 
     ; If GUI already exists, just show it
@@ -585,8 +585,8 @@ ShowMicrophoneSettingsGui(blnForceSelection := false) {
     objTxtThresholdValue := objMicSettingsGui.AddText("x+10 w50", intCurrentThreshold "%")
 
     objMicSettingsGui.AddText("xs w400", "")
-    objChkShowConfidence := objMicSettingsGui.AddCheckbox("w400", "Show confidence % in recognition tooltip")
-    objChkShowConfidence.Value := blnShowConfidence
+    objChkshowConfidence := objMicSettingsGui.AddCheckbox("w400", "Show confidence % in recognition tooltip")
+    objChkshowConfidence.Value := blnShowConfidence
 
     ; Test section
     objMicSettingsGui.AddText("w400", "")
@@ -644,20 +644,20 @@ MicListClick(ctrl, info) {
 SaveMicSettings(*) {
     LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
     global strIniFile, intCurrentMicIndex, strCurrentMicName, objMicSettingsGui
-    global objSliderThreshold, objChkShowConfidence
+    global objSliderThreshold, objChkshowConfidence
     global fltConfidenceThreshold, blnShowConfidence
 
     try {
-        IniWrite(intCurrentMicIndex, strIniFile, "Settings", "MicrophoneIndex")
-        IniWrite(strCurrentMicName, strIniFile, "Settings", "MicrophoneName")
+        IniWrite(intCurrentMicIndex, strIniFile, "Settings", "microphoneIndex")
+        IniWrite(strCurrentMicName, strIniFile, "Settings", "microphoneName")
 
         ; Save confidence settings
         intThreshold := objSliderThreshold.Value
         fltConfidenceThreshold := intThreshold / 100
-        blnShowConfidence := objChkShowConfidence.Value
+        blnShowConfidence := objChkshowConfidence.Value
 
-        IniWrite(intThreshold, strIniFile, "Settings", "ConfidenceThreshold")
-        IniWrite(blnShowConfidence ? "1" : "0", strIniFile, "Settings", "ShowConfidence")
+        IniWrite(intThreshold, strIniFile, "Settings", "confidenceThreshold")
+        IniWrite(blnShowConfidence ? "1" : "0", strIniFile, "Settings", "showConfidence")
 
         LogMsg(FFL(A_ThisFunc, A_LineNumber) . "Saved mic: [" intCurrentMicIndex "] " strCurrentMicName, 2)
         LogMsg(FFL(A_ThisFunc, A_LineNumber) . "Saved threshold: " intThreshold "%, ShowConf: " blnShowConfidence, 2)

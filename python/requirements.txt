@@ -1,6 +1,8 @@
+# Install torch separately before the rest (CPU-only build, ~200 MB):
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+torch
+silero-vad
 vosk
+faster-whisper
 sounddevice
 psutil
-silero-vad
-faster-whisper
-torch

@@ -59,7 +59,7 @@ class VoiceBridge:
         self.ini_path     = ini_path
         self.mode         = "sapi"      # sapi | vosk | whisper | pause
         self.lang         = "default"   # default | special
-        self.special_lang = ""          # e.g. "nl" -- from INI LocalLanguage=
+        self.special_lang = ""          # e.g. "nl" -- from INI localLanguage=
         self.models       = {}          # {"default": Model, "special": Model}
         self.recognizers  = {}          # {"default": KaldiRecognizer, ...}
         self.whisper_model = None       # faster_whisper.whisperModel instance
@@ -79,8 +79,8 @@ class VoiceBridge:
 
     def load_config(self):
         cfg = load_ini(self.ini_path)
-        self.special_lang = cfg.get("Settings", "LocalLanguage", fallback="").strip().lower()
-        logging.info("LocalLanguage setting: '%s'", self.special_lang or "(none)")
+        self.special_lang = cfg.get("Settings", "localLanguage", fallback="").strip().lower()
+        logging.info("localLanguage setting: '%s'", self.special_lang or "(none)")
 
     def load_models(self):
         base = os.path.normpath(
@@ -391,8 +391,10 @@ class VoiceBridge:
                                 audio_np    = np.frombuffer(audio_bytes, dtype=np.int16) \
                                                 .astype(np.float32) / 32768.0
 
-                                lang_code = self.special_lang \
-                                            if self.lang == "special" else "en"
+                                if self.lang == "special":
+                                    lang_code = self.special_lang
+                                else:
+                                    lang_code = "en"
 
                                 try:
                                     segments, _ = self.whisper_model.transcribe(

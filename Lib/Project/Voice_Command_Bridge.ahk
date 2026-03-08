@@ -53,9 +53,9 @@ BridgeInit() {
     LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
     global strIniFile, strSpecialLanguage, intBridgePid
 
-    ; Read LocalLanguage= setting from INI
-    strSpecialLanguage := Trim(IniRead(strIniFile, "Settings", "LocalLanguage", ""))
-    LogMsg(FFL(A_ThisFunc, A_LineNumber) . "LocalLanguage setting: '" strSpecialLanguage "'", 2)
+    ; Read localLanguage= setting from INI
+    strSpecialLanguage := Trim(IniRead(strIniFile, "Settings", "localLanguage", ""))
+    LogMsg(FFL(A_ThisFunc, A_LineNumber) . "localLanguage setting: '" strSpecialLanguage "'", 2)
 
     ; Verify bridge script exists
     strBridgePath := A_ScriptDir "\python\bridge.py"
@@ -339,7 +339,7 @@ ToggleLanguage() {
     }
 
     if (strSpecialLanguage = "") {
-        ToolTip("No local language configured -- add LocalLanguage=nl to INI")
+        ToolTip("No local language configured -- add localLanguage=nl to INI")
         SetTimer(() => ToolTip(), -3000)
         return
     }
