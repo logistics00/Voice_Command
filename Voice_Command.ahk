@@ -19,11 +19,11 @@
 ;   v1.3.3 - Added dynamic tray icons for listening state
 ;          - listening.ico when ON, Not Listening.ico when OFF
 ;   v1.4.0 - Redesigned Command Manager GUI with:
-;          - Four input fields: Words Said, Group, Type, Action
+;          - Three input fields: Words Said, Type, Action
 ;          - Three action buttons: Add, Edit, Delete
 ;          - ListView showing all commands in four columns
 ;          - Click row to populate input fields for editing
-;          - Updated INI format: phrase=group|type|action
+;          - INI format: phrase=type|action
 ;   v1.4.1 - Fixed SetFont option "Normal" to "norm" for AHK v2
 ;   v1.4.2 - Fixed ListView options: removed + prefix, use LV0x20
 ;          - for full row select (AHK v2 syntax)
@@ -55,10 +55,8 @@
 ;            Added refresh of logging file at start of script
 ;            Changed logEnabled => loggingType to support different logging levels
 ;   v1.8.0-A - OPTIE A: Twee aparte grammars
-;            - Control grammar (start/stop) blijft ALTIJD actief
-;            - Main grammar wordt aan/uit gezet op basis van blnCommandsEnabled
-;            - "Stop" pauzeert alle commando's behalve "Start"
-;            - "Start" hervat normale werking
+;            - Control grammar (start/stop) moved to built-in grammar
+;            - Soft pause (blnCommandsEnabled / "start"/"pause" voice commands) removed
 ;   v1.8.1-A - MODULAR: Script opgesplitst in 4 bestanden
 ;            - Betere onderhoudbaarheid en overzicht
 
@@ -90,9 +88,8 @@ global mapControlCommands := Map()
 global intTestMode := 0
 global blnLogEnabled := true
 global blnListening := true
-global blnCommandsEnabled := true
 
-; Voice mode: sapi | vosk | whisper | pause
+; Voice mode: sapi | vosk | whisper
 global strVoiceMode := "sapi"
 global speakLanguage := "default"   ; default = English, special = localLanguage= from INI
 global strSpecialLanguage := ""     ; e.g. "nl" — read from INI at bridge startup
@@ -116,22 +113,19 @@ global intCircleSize := 30
 global intCircleMargin := 20
 global strColorListening := "0088FF"    ; Blue  — SAPI active
 global strColorNotListening := "FF0000" ; Red   — listening OFF (F1)
-global strColorPaused := "FFA500"       ; Orange — paused / SAPI commands off
 global strColorVosk := "00CC44"         ; Green  — Vosk mode
 global strColorWhisper := "9900CC"      ; Purple — Whisper mode (Phase 2)
 
-; Command Manager GUI globals
-global objCmdManagerGui := ""
-global objLvCommands := ""
-global objEdtWordsSaid := ""
-global objEdtGroup := ""
-global objDdlType := ""
-global objEdtAction := ""
-global intSelectedRow := 0
+; Command Manager / Microphone GUI globals
+global goo := ""
+global objManagerTab := ""
+global lv1 := ""
+global edtCommand := ""
+global ddlType := ""
+global edtAction := ""
+global lv1Row := 0
 
 ; Microphone Settings GUI globals
-global objMicSettingsGui := ""
-global objLvMicrophones := ""
 global objProgressLevel := ""
 global objTxtLevelPercent := ""
 global objTxtMicStatus := ""
@@ -143,6 +137,9 @@ global blnMicTestMode := false
 ; Confidence Threshold settings
 global fltConfidenceThreshold := 0.40
 global blnShowConfidence := true
+
+; SAPI Speak Mode (0=log only, 1=tooltip+log for Hypothesis/FalseRecognition)
+global intSapiSpeakMode := 0
 global objSliderThreshold := ""
 global objTxtThresholdValue := ""
 global objChkshowConfidence := ""
@@ -156,11 +153,11 @@ global intLoggingType := 0
 ;============================================================
 ; INCLUDE MODULES (order matters!)
 ;============================================================
-#Include <General\Peep_v2>		; Library for displaying the contnts of AHK-vars
-#Include <Project\Voice_Command_UI>		; 2. SECOND: User Interface - uses Utils but not Core
-#Include <Project\Voice_Command_Utils>	; 1. FIRST: Utilities - no dependencies on other modules
-#Include <Project\Voice_Command_Bridge>	; 4. Bridge: TCP connection to Python voice bridge
-#Include <Project\Voice_Command_Core>		; 5. LAST: Core SAPI engine - uses Utils and UI functions
+#Include <General\Peep_v2>				; Library			- for displaying the contnts of AHK-vars
+#Include <Project\Voice_Command_UI>		; User Interface	- uses Utils but not Core
+#Include <Project\Voice_Command_Utils>	; Utilities			- no dependencies on other modules
+#Include <Project\Voice_Command_Bridge>	; TCP				- connection to Python voice bridge
+#Include <Project\Voice_Command_Core>	; Core SAPI engine	- uses Utils and UI functions
 
 ;============================================================
 ; INITIALIZATION
@@ -197,15 +194,23 @@ BridgeInit()
 ;============================================================
 
 ; F1 Hotkey - Toggle Listening On/Off
-F1:: ToggleListening()
+HotKey(IniRead(strIniFile, 'HotKeys', 'listening', 'F1'), ToggleListeningMenu)
+; Hotkey('^!s', ToggleListening())
+; F1:: ToggleListening()
 
 ; F2 Hotkey - Show Command Manager GUI
-F2:: ShowCommandManagerGui()
+HotKey(IniRead(strIniFile, 'HotKeys', 'mainGui', 'F2'), HotkeyMenu)
+; Hotkey('^!s', ShowCommandManagerGui())
+; F2:: ShowCommandManagerGui()
 
 ; F3 Hotkey - Cycle voice mode: SAPI -> Vosk -> Whisper -> SAPI
-F3:: CycleVoiceMode()
+HotKey(IniRead(strIniFile, 'HotKeys', 'modus', 'F3'), CycleVoiceMode)
+; Hotkey('^!s', CycleVoiceMode())
+; F3:: CycleVoiceMode()
 
 ; F4 Hotkey - Toggle Vosk language (default/special)
-F4:: ToggleLanguage()
+HotKey(IniRead(strIniFile, 'HotKeys', 'language', 'F1'), ToggleLanguage)
+; Hotkey('^!s', ToggleListening())
+; F4:: ToggleLanguage()
 
 ;================= End of VOICECOMMAND Entry Point =================

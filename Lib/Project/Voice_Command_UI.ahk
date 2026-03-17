@@ -9,10 +9,11 @@
 
 /** @description SetupTrayMenu - Build the system tray context menu */
 SetupTrayMenu() {
-    LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
     A_TrayMenu.Delete()
-    A_TrayMenu.Add("Command Manager", ShowCommandManagerMenu)
-    A_TrayMenu.Add("Microphone Settings", ShowMicSettingsMenu)
+    A_TrayMenu.Add("Hotkey Settings", HotkeyMenu)
+    A_TrayMenu.Add("Command Settings", CmdMenu)
+    A_TrayMenu.Add("Microphone Settings", MicMenu)
     A_TrayMenu.Add()
     A_TrayMenu.Add("Reload Commands", ReloadCommandsMenu)
     A_TrayMenu.Add("Edit INI File", EditIniMenu)
@@ -22,20 +23,22 @@ SetupTrayMenu() {
     A_TrayMenu.Add()
     A_TrayMenu.Add("Exit", ExitMenu)
 
-    A_TrayMenu.Default := "Command Manager"
+    A_TrayMenu.Default := "Command Settings"
 }
 
 ; Tray Menu Callbacks
-ShowCommandManagerMenu(*) {
-    ShowCommandManagerGui()
+HotkeyMenu(*) {
+    HotkeyCmdMicGui(1)
 }
-
-ShowMicSettingsMenu(*) {
-    ShowMicrophoneSettingsGui()
+CmdMenu(*) {
+    HotkeyCmdMicGui(2)
+}
+MicMenu(*) {
+    HotkeyCmdMicGui(3)
 }
 
 ReloadCommandsMenu(*) {
-    LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
     global mapCommands
 
     mapCommands := LoadCommandsFromIni()
@@ -45,7 +48,7 @@ ReloadCommandsMenu(*) {
 }
 
 EditIniMenu(*) {
-    LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
     global strIniFile
 
     try {
@@ -60,7 +63,11 @@ ToggleListeningMenu(*) {
 }
 
 ToggleLoggingMenu(*) {
-    LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
+    ToggleLogging()
+}
+
+ToggleLogging() {
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
     global blnLogEnabled, strIniFile
 
     blnLogEnabled := !blnLogEnabled
@@ -70,7 +77,7 @@ ToggleLoggingMenu(*) {
     }
 
     MsgBox("Logging is now " (blnLogEnabled ? "ON" : "OFF"), "Logging Toggle", "Iconi")
-    LogMsg(FFL(A_ThisFunc, A_LineNumber) . "Logging toggled: " (blnLogEnabled ? "ON" : "OFF"), 2)
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . "Logging toggled: " (blnLogEnabled ? "ON" : "OFF"), 2)
 }
 
 ExitMenu(*) {
@@ -78,7 +85,7 @@ ExitMenu(*) {
     if (blnExiting)
         return
     blnExiting := true
-    LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
     CleanupVoice('User Exit', 0)
 }
 
@@ -88,19 +95,14 @@ ExitMenu(*) {
 
 /** @description UpdateTrayIcon - Update tray icon and status circle based on listening state */
 UpdateTrayIcon() {
-    LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global blnListening, blnCommandsEnabled
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
+    global blnListening
     global strIconListening, intIconListeningNum
     global strIconNotListening, intIconNotListeningNum
 
     if (blnListening) {
-        if (blnCommandsEnabled) {
-            TraySetIcon(strIconListening, intIconListeningNum)
-            A_IconTip := "Voice Command - Listening (Active)"
-        } else {
-            TraySetIcon(strIconListening, intIconListeningNum)
-            A_IconTip := "Voice Command - Listening (Paused - say 'Start')"
-        }
+        TraySetIcon(strIconListening, intIconListeningNum)
+        A_IconTip := "Voice Command - Listening (Active)"
     } else {
         TraySetIcon(strIconNotListening, intIconNotListeningNum)
         A_IconTip := "Voice Command - NOT Listening"
@@ -111,8 +113,8 @@ UpdateTrayIcon() {
 
 /** @description ToggleListening - Toggle voice command listening state on/off */
 ToggleListening() {
-    LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global objGrammar, objControlGrammar, blnListening, blnCommandsEnabled, intTestMode
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
+    global objGrammar, objControlGrammar, blnListening, intTestMode
 
     if (intTestMode) {
         ToolTip("Cannot toggle in Test Mode")
@@ -123,20 +125,17 @@ ToggleListening() {
     blnListening := !blnListening
 
     if (blnListening) {
-        ; Enable control grammar (always)
-        objControlGrammar.CmdSetRuleState("control", 1)
-        ; Enable main grammar only if commands are enabled
-        if (blnCommandsEnabled) {
-            objGrammar.CmdSetRuleState("cmd", 1)
-        }
+        ; Enable both grammars
+        objGrammar.CmdSetRuleState("cmd", 1)
+        try { objControlGrammar.CmdSetRuleState("control", 1) }
         ToolTip("🎤 Listening ON")
-        LogMsg(FFL(A_ThisFunc, A_LineNumber) . "Listening toggled ON via F1", 2)
+        LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . "Listening toggled ON via F1", 2)
     } else {
         ; Disable both grammars
         objGrammar.CmdSetRuleState("cmd", 0)
         objControlGrammar.CmdSetRuleState("control", 0)
         ToolTip("🔇 Listening OFF")
-        LogMsg(FFL(A_ThisFunc, A_LineNumber) . "Listening toggled OFF via F1", 2)
+        LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . "Listening toggled OFF via F1", 2)
     }
 
     UpdateTrayIcon()
@@ -150,6 +149,7 @@ ToggleListening() {
 /** @description GetStatusLabel - Return language label for Vosk/Whisper modes
     @returns {string} - "EN", "NL", etc. when in Vosk/Whisper; "" otherwise */
 GetStatusLabel() {
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
     global strVoiceMode, speakLanguage, strSpecialLanguage
 
     if (strVoiceMode = "vosk" || strVoiceMode = "whisper") {
@@ -162,11 +162,12 @@ GetStatusLabel() {
 
 /** @description GetStatusColor - Return circle color for the current voice mode
     @returns {string} - Hex color code without '#'
-    @details - strVoiceMode drives color: sapi=blue, vosk=green, whisper=purple, pause=orange
+    @details - strVoiceMode drives color: sapi=blue, vosk=green, whisper=purple
              - blnListening=false overrides to red regardless of mode */
 GetStatusColor() {
-    global blnListening, blnCommandsEnabled, strVoiceMode
-    global strColorListening, strColorNotListening, strColorPaused, strColorVosk, strColorWhisper
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
+    global blnListening, strVoiceMode
+    global strColorListening, strColorNotListening, strColorVosk, strColorWhisper
 
     if (!blnListening)
         return strColorNotListening     ; Red — F1 listening OFF
@@ -174,14 +175,13 @@ GetStatusColor() {
     switch strVoiceMode {
         case "vosk":    return strColorVosk             ; Green
         case "whisper": return strColorWhisper          ; Purple
-        case "pause":   return strColorPaused           ; Orange
-        default:        return blnCommandsEnabled ? strColorListening : strColorPaused
+        default:        return strColorListening        ; Blue — SAPI active
     }
 }
 
 /** @description CreateStatusCircle - Create the visual status circle overlay window */
 CreateStatusCircle() {
-    LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
     global objStatusCircle, intCircleSize, intCircleMargin
 
     ; Calculate position in upper right corner
@@ -189,12 +189,12 @@ CreateStatusCircle() {
     intYPos := intCircleMargin + (intCircleSize // 2)
 
     objStatusCircle := ShowCircle(intCircleSize, GetStatusColor(), intXPos, intYPos, GetStatusLabel())
-    LogMsg(FFL(A_ThisFunc, A_LineNumber) . "Status circle created at " intXPos ", " intYPos, 2)
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . "Status circle created at " intXPos ", " intYPos, 2)
 }
 
 /** @description UpdateStatusCircle - Update status circle color when listening state changes */
 UpdateStatusCircle() {
-    LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
     global objStatusCircle, intCircleSize, intCircleMargin
 
     ; If circle doesn't exist yet, create it
@@ -224,7 +224,7 @@ UpdateStatusCircle() {
     @param {string} strLabel - Optional language label drawn in center (e.g. "EN", "NL")
     @returns {object} - GUI object reference */
 ShowCircle(circleSize := 50, circleColor := "FF0000", xPos := "", yPos := "", strLabel := "") {
-    LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
     if (xPos = "") {
         xPos := A_ScreenWidth // 2
     }
@@ -261,148 +261,314 @@ ShowCircle(circleSize := 50, circleColor := "FF0000", xPos := "", yPos := "", st
 ; COMMAND MANAGER GUI
 ;============================================================
 
-/** @description ShowCommandManagerGui - Show the Command Manager GUI */
-ShowCommandManagerGui() {
-    LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global objCmdManagerGui, objLvCommands
-    global objEdtWordsSaid, objEdtGroup, objDdlType, objEdtAction
-    global mapCommands, intSelectedRow
+/** @description HotkeyCmdMicGui - Show the unified Hotkeys/Commands/Microphone GUI
+    @param {integer} defaultTab - Tab to show on open: 1=Commands, 2=Microphone (default: 1) */
+HotkeyCmdMicGui(defaultTab := 1) {
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
+    global goo, objManagerTab
+    global edtCommand, ddlType, edtAction
+    global mapCommands, lv1, lv1Row
     global strIniFile
+    global objRecognizer, intCurrentMicIndex, strCurrentMicName
+    global objProgressLevel, objTxtLevelPercent, objTxtMicStatus, objTxtTestResult
+    global objSliderThreshold, objTxtThresholdValue, objChkshowConfidence
+    global fltConfidenceThreshold, blnShowConfidence
 
-    intGuiHeight := Integer(IniRead(strIniFile, "Gui", "height", 40))
-    intGuiWidth := Integer(IniRead(strIniFile, "Gui", "width", 1000))
-    intGuiWidthCol4 := Integer(IniRead(strIniFile, "Gui", "width_col4", 600))
-    intGuiWidthCol1 := (intGuiWidth - intGuiWidthCol4 - 40) // 3
-
-    ; If GUI already exists, just show it
-    if (objCmdManagerGui != "") {
-        try {
-            objCmdManagerGui.Show()
-            return
-        }
+    ; If GUI already exists, switch to requested tab and show
+    if (goo != "") {
+        objManagerTab.Value := defaultTab
+        SetTimer(UpdateAudioLevel, defaultTab = 3 ? 100 : 0)
+        goo.Show()
+        return
     }
 
-    intSelectedRow := 0
+    guiWidth := Integer(IniRead(strIniFile, "Gui", "width", 1000))
+    widthCol4 := Integer(IniRead(strIniFile, "Gui", "width_col4", 600))
+    widthCol1 := 150
+    ; widthCol1 := (guiWidth - widthCol4) // 3
+    lv1Row := 0
 
-    objCmdManagerGui := Gui("+Resize", "Voice Command Manager")
-    objCmdManagerGui.SetFont("s10", "Segoe UI")
-    objCmdManagerGui.OnEvent("Close", CmdManagerClose)
+    goo := Gui('+Resize', 'Voice Command Manager')
+    goo.BackColor := '0x00C0C0'
+    goo.SetFont('s12 w700', 'Calibri')
+    goo.OnEvent('Close', HotkeyCmdMicGuiClose)
 
-    ; Input Fields Row
-    objCmdManagerGui.AddText("Section", "Words Said:")
-    objCmdManagerGui.AddText("x+80", "Group:")
-    objCmdManagerGui.AddText("x+80", "Type:")
-    objCmdManagerGui.AddText("x+80", "Action:")
+    ; ; Tab control — must be added before all tab content
+    ; tab := goo.AddTab3('x0 y0 w' guiWidth, ['Commands', 'Microphone'])
+    ; tab.OnEvent('Change', TabChanged)
+    ; objManagerTab := tab
 
-    objCmdManagerGui.AddText("xs", "")
-    objEdtWordsSaid := objCmdManagerGui.AddEdit("xs w150")
-    objEdtGroup := objCmdManagerGui.AddEdit("x+10 w100")
-    objDdlType := objCmdManagerGui.AddDropDownList("x+10 w100", ["Run", "File", "WinClose", "Send", "Mouse", "MsgBox", "Function"])
-    objEdtAction := objCmdManagerGui.AddEdit("x+10 w" intGuiWidthCol4)
+    ; ;----------------------------------------------------------
+    ; ; TAB 1 — Commands (Hotkeys + Add/Edit + ListView)
+    ; ;----------------------------------------------------------
+    ; tab.UseTab(1)
+    ; Tab control — must be added before all tab content
+    tab := goo.AddTab3('x10 y+m w' guiWidth, ['Hotkeys', 'Commands', 'Microphone'])
+    tab.OnEvent('Change', (ctrl, *) => SetTimer(UpdateAudioLevel, ctrl.Value = 3 ? 100 : 0))
+    ; objManagerTab := tab
 
-    ; Action Buttons
-    objCmdManagerGui.AddText("xs", "")
-    objBtnAdd := objCmdManagerGui.AddButton("xs w80", "Add")
-    objBtnAdd.OnEvent("Click", AddCommand)
-    objBtnEdit := objCmdManagerGui.AddButton("x+10 w80", "Update")
-    objBtnEdit.OnEvent("Click", EditCommand)
-    objBtnDelete := objCmdManagerGui.AddButton("x+10 w80", "Delete")
-    objBtnDelete.OnEvent("Click", DeleteCommand)
-    objBtnClear := objCmdManagerGui.AddButton("x+10 w80", "Clear")
-    objBtnClear.OnEvent("Click", ClearFields)
+    ;----------------------------------------------------------
+    ; TAB 1 — Commands (Hotkeys + Add/Edit + ListView)
+    ;----------------------------------------------------------
 
-    ; Command ListView
-    objCmdManagerGui.AddText("xs", "")
-    strLvOptions := "xs w" intGuiWidth " h300 Grid LV0x20"
-    objLvCommands := objCmdManagerGui.AddListView(strLvOptions, ["Words Said", "Group", "Type", "Action"])
-    objLvCommands.OnEvent("Click", CommandListClick)
-    objLvCommands.OnEvent("DoubleClick", CommandListDoubleClick)
+	tab.UseTab(1)
 
-    ; Populate ListView
+	goo.AddText('x30 y+m', 'If you know how HotKeys in AHK work, you may change the defaults.')
+    goo.AddText('x30 y+m', 'At start, "Resulting HotKey" contains the actual HotKey.')
+    ; goo.SetFont('s12 cYellow w1000', 'Calibri')
+    goo.AddText('x30 y+m w150', 'Toggle Listening')
+    strHotkey := IniRead(strIniFile, 'HotKeys', 'listening')
+    global cbListeningWin := goo.AddCheckbox((InStr(strHotkey, '#') ? 'x+m yp Checked' : 'x+m yp'), 'Win')
+    global cbListeningCtrl := goo.AddCheckbox((InStr(strHotkey, '^') ? 'x+m yp Checked' : 'x+m yp'), 'Ctrl')
+    global cbListeningShift := goo.AddCheckbox((InStr(strHotkey, '+') ? 'x+m yp Checked' : 'x+m yp'), 'Shift')
+    global cbListeningAlt := goo.AddCheckbox((InStr(strHotkey, '!') ? 'x+m yp Checked' : 'x+m yp'), 'Alt')
+    goo.AddText('x+m yp', 'Resulting HotKey:')
+    global edtListening := goo.AddEdit('x+m yp w150 Background0x00F0F0', strHotkey)
+    goo.AddButton('x+m yp h25', 'Reset').OnEvent('Click', (*) => UpdateHotkeyEdtField(edtListening, 'listening'))
+    cbListeningWin.OnEvent('Click', (*) => UpdateHotkey(cbListeningWin, edtListening, '#', 'listening'))
+    cbListeningCtrl.OnEvent('Click', (*) => UpdateHotkey(cbListeningCtrl, edtListening, '^', 'listening'))
+    cbListeningShift.OnEvent('Click', (*) => UpdateHotkey(cbListeningShift, edtListening, '+', 'listening'))
+    cbListeningAlt.OnEvent('Click', (*) => UpdateHotkey(cbListeningAlt, edtListening, '!', 'listening'))
+    goo.AddText('x30 y+m w150', 'Show MainGui')
+    strHotkey := IniRead(strIniFile, 'HotKeys', 'mainGui')
+    global cbMainGuiWin := goo.AddCheckbox((InStr(strHotkey, '#') ? 'x+m yp Checked' : 'x+m yp'), 'Win')
+    global cbMainGuiCtrl := goo.AddCheckbox((InStr(strHotkey, '^') ? 'x+m yp Checked' : 'x+m yp'), 'Ctrl')
+    global cbMainGuiShift := goo.AddCheckbox((InStr(strHotkey, '+') ? 'x+m yp Checked' : 'x+m yp'), 'Shift')
+    global cbMainGuiAlt := goo.AddCheckbox((InStr(strHotkey, '!') ? 'x+m yp Checked' : 'x+m yp'), 'Alt')
+    goo.AddText('x+m yp', 'Resulting HotKey:')
+    global edtMainGui := goo.AddEdit('x+m yp w150 Background0x00F0F0', strHotkey)
+    goo.AddButton('x+m yp h25', 'Reset').OnEvent('Click', (*) => UpdateHotkeyEdtField(edtMainGui, 'mainGui'))
+    cbMainGuiWin.OnEvent('Click', (*) => UpdateHotkey(cbMainGuiWin, edtMainGui, '#', 'mainGui'))
+    cbMainGuiCtrl.OnEvent('Click', (*) => UpdateHotkey(cbMainGuiCtrl, edtMainGui, '^', 'mainGui'))
+    cbMainGuiShift.OnEvent('Click', (*) => UpdateHotkey(cbMainGuiShift, edtMainGui, '+', 'mainGui'))
+    cbMainGuiAlt.OnEvent('Click', (*) => UpdateHotkey(cbMainGuiAlt, edtMainGui, '!', 'mainGui'))
+    goo.AddText('x30 y+m w150', 'Cycle Modi')
+    strHotkey := IniRead(strIniFile, 'HotKeys', 'modus')
+    global cbModusWin := goo.AddCheckbox((InStr(strHotkey, '#') ? 'x+m yp Checked' : 'x+m yp'), 'Win')
+    global cbModusCtrl := goo.AddCheckbox((InStr(strHotkey, '^') ? 'x+m yp Checked' : 'x+m yp'), 'Ctrl')
+    global cbModusShift := goo.AddCheckbox((InStr(strHotkey, '+') ? 'x+m yp Checked' : 'x+m yp'), 'Shift')
+    global cbModusAlt := goo.AddCheckbox((InStr(strHotkey, '!') ? 'x+m yp Checked' : 'x+m yp'), 'Alt')
+    goo.AddText('x+m yp', 'Resulting HotKey:')
+    global edtModus := goo.AddEdit('x+m yp w150 Background0x00F0F0', strHotkey)
+    goo.AddButton('x+m yp h25', 'Reset').OnEvent('Click', (*) => UpdateHotkeyEdtField(edtModus, 'modus'))
+    cbModusWin.OnEvent('Click', (*) => UpdateHotkey(cbModusWin, edtModus, '#', 'modus'))
+    cbModusCtrl.OnEvent('Click', (*) => UpdateHotkey(cbModusCtrl, edtModus, '^', 'modus'))
+    cbModusShift.OnEvent('Click', (*) => UpdateHotkey(cbModusShift, edtModus, '+', 'modus'))
+    cbModusAlt.OnEvent('Click', (*) => UpdateHotkey(cbModusAlt, edtModus, '!', 'modus'))
+    goo.AddText('x30 y+m w150', 'Toggle Language')
+    strHotkey := IniRead(strIniFile, 'HotKeys', 'language')
+    global cbLanguageWin := goo.AddCheckbox((InStr(strHotkey, '#') ? 'x+m yp Checked' : 'x+m yp'), 'Win')
+    global cbLanguageCtrl := goo.AddCheckbox((InStr(strHotkey, '^') ? 'x+m yp Checked' : 'x+m yp'), 'Ctrl')
+    global cbLanguageShift := goo.AddCheckbox((InStr(strHotkey, '+') ? 'x+m yp Checked' : 'x+m yp'), 'Shift')
+    global cbLanguageAlt := goo.AddCheckbox((InStr(strHotkey, '!') ? 'x+m yp Checked' : 'x+m yp'), 'Alt')
+    goo.AddText('x+m yp', 'Resulting HotKey:')
+    global edtLanguage := goo.AddEdit('x+m yp w150 Background0x00F0F0', strHotkey)
+    goo.AddButton('x+m yp h25', 'Reset').OnEvent('Click', (*) => UpdateHotkeyEdtField(edtLanguage, 'language'))
+    cbLanguageWin.OnEvent('Click', (*) => UpdateHotkey(cbLanguageWin, edtLanguage, '#', 'language'))
+    cbLanguageCtrl.OnEvent('Click', (*) => UpdateHotkey(cbLanguageCtrl, edtLanguage, '^', 'language'))
+    cbLanguageShift.OnEvent('Click', (*) => UpdateHotkey(cbLanguageShift, edtLanguage, '+', 'language'))
+    cbLanguageAlt.OnEvent('Click', (*) => UpdateHotkey(cbLanguageAlt, edtLanguage, '!', 'language'))
+
+	; goo.AddGroupBox('x30 y50 r7 w850', 'Hotkeys')
+
+    tab.UseTab(2)
+
+    goo.AddText("x30 y+m", "Command:")
+    goo.AddText("x+90 yp", "Type:")
+    goo.AddText("x+80 yp", "Action:")
+    edtCommand := goo.AddEdit("x30 y+0 w150 Background0x00F0F0")
+    ddlType := goo.AddDropDownList("x+m yp w100 Background0x00F0F0", ["Run", "File", "WinClose", "Send", "Mouse", "MsgBox", "Function"])
+    edtAction := goo.AddEdit("x+m yp w" widthCol4 " Background0x00F0F0")
+
+    btnAdd := goo.AddButton("x30 y+m w80 h30", "Add")
+    btnAdd.OnEvent("Click", AddCommand)
+    btnEdit := goo.AddButton("x+m yp w80 h30", "Update")
+    btnEdit.OnEvent("Click", EditCommand)
+    btnDelete := goo.AddButton("x+m yp w80 h30", "Delete")
+    btnDelete.OnEvent("Click", DeleteCommand)
+    btnClear := goo.AddButton("x+m yp w80 h30", "Clear")
+    btnClear.OnEvent("Click", ClearFields)
+
+    strLvOptions := "x30 y+40 w" guiWidth - 30 " r30 BackGround0x03f68f Grid LV0x20"
+    lv1 := goo.AddListView(strLvOptions, ["Command", "Type", "Action"])
+    lv1.OnEvent("Click", CommandListClick)
+    lv1.OnEvent("DoubleClick", CommandListDoubleClick)
+
+    ; goo.AddGroupBox('x30 y50 r4 w900', 'Add / Edit Command')
+
     RefreshCommandList()
 
-    ; Set column widths
-    objLvCommands.ModifyCol(1, intGuiWidthCol1)
-    objLvCommands.ModifyCol(2, intGuiWidthCol1)
-    objLvCommands.ModifyCol(3, intGuiWidthCol1)
-    objLvCommands.ModifyCol(4, intGuiWidthCol4)
+    lv1.ModifyCol(1, '150 sort')
+    lv1.ModifyCol(2, '100 sort')
+    lv1.ModifyCol(3, widthCol4)
+    ; lv1.ModifyCol(1, widthCol1)
+    ; lv1.ModifyCol(2, widthCol1)
+    ; lv1.ModifyCol(3, widthCol4)
+    ; lv1.ModifyCol(4, widthCol4)
 
-    objCmdManagerGui.Show()
+    ;----------------------------------------------------------
+    ; TAB 2 — Microphone Settings
+    ;----------------------------------------------------------
+    tab.UseTab(3)
+
+    goo.AddText('x30 y+m', 'Select your microphone for voice recognition:')
+    objTxtMicStatus := goo.AddText('x+m yp', '[Current: ' strCurrentMicName ']')
+    lv2 := goo.AddListView('x30 y+m w400 r4 -Multi Background0x00F0F0', ['#', 'Microphone Name'])
+    lv2.OnEvent('Click', MicListClick)
+
+    try {
+        objAudioInputs := objRecognizer.GetAudioInputs()
+        Loop objAudioInputs.Count {
+            intIdx := A_Index - 1
+            strMicName := objAudioInputs.Item(intIdx).GetDescription()
+            lv2.Add("", intIdx, strMicName)
+            if (intIdx = intCurrentMicIndex)
+                lv2.Modify(A_Index, "+Select +Focus")
+        }
+    }
+    lv2.ModifyCol(1, 30)
+    lv2.ModifyCol(2, 360)
+
+    goo.AddText('x30 y+m+30', 'Audio Level (speak to test):')
+    objProgressLevel := goo.AddProgress('x+m yp w400 h20 Range0-100 Background0x00F0F0', 0)
+    objTxtLevelPercent := goo.AddText('x+m yp', 'Level: 0%')
+
+    goo.AddText('x30 y+m+30', 'Confidence Threshold (reject below this %):')
+    intCurrentThreshold := Round(fltConfidenceThreshold * 100)
+    objSliderThreshold := goo.AddSlider('x+m yp w300 Range0-100 TickInterval10 AltSubmit Background0x00F0F0', intCurrentThreshold)
+    objSliderThreshold.OnEvent('Change', ThresholdSliderChange)
+    objTxtThresholdValue := goo.AddText('x+m yp w50', intCurrentThreshold '%')
+
+    objChkshowConfidence := goo.AddCheckbox('x30 y+m+10', 'Show confidence % in recognition tooltip')
+    objChkshowConfidence.Value := blnShowConfidence
+    goo.AddButton('x+m yp w150 h30', 'Test Recognition').OnEvent('Click', TestMicRecognition)
+    objTxtTestResult := goo.AddText('x+m yp h40', "Click 'Test Recognition' and speak...")
+
+    goo.AddButton('x30 y+m+30 h30', 'Save Microphone Settings').OnEvent('Click', SaveMicSettings)
+
+    tab.UseTab(0)											; close construction context
+    tab.Value := defaultTab									; select correct tab
+    SetTimer(UpdateAudioLevel, defaultTab = 3 ? 100 : 0)	; start monitor if Mic tab
+    goo.Show('AutoSize Center')
+}
+
+UpdateHotkey(cb, edt, token, type) {
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
+	oldHotkey := IniRead(strIniFile, 'HotKeys', type)
+
+	newHotkey := oldHotkey
+	alreadyIn := InStr(edt.Value, token)
+	if (cb.Value) && !alreadyIn
+		edt.Value := token . edt.Value
+	else if !cb.Value && alreadyIn
+		edt.Value := StrReplace(edt.Value, token, '')
+
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 2)
+}
+
+/** @description HotkeyCmdMicGuiClose - Close handler: stop audio monitor and destroy GUI */
+HotkeyCmdMicGuiClose(*) {
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
+    global goo
+    SetTimer(UpdateAudioLevel, 0)
+    goo.Destroy()
+    goo := ""
+}
+
+UpdateHotkeyEdtField(edt, type) {
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
+	if CheckHotkey(edt.Value, ' is wrong. ') = false {
+		return
+	}
+
+	Hotkey(IniRead(strIniFile, 'HotKeys', type), 'Off')
+
+	IniWrite(edt.Value, strIniFile, 'HotKeys', type)
+	Hotkey(IniRead(strIniFile, 'HotKeys', type), 'On')
+
+	Switch type {
+		case 'listening':
+			Hotkey(IniRead(strIniFile, 'HotKeys', 'listening'), ToggleListeningMenu)
+		case 'mainGui':
+			Hotkey(IniRead(strIniFile, 'HotKeys', 'mainGui'), HotkeyMenu)
+		case 'modus':
+			Hotkey(IniRead(strIniFile, 'HotKeys', 'modus'), CycleVoiceMode)
+		case 'language':
+			Hotkey(IniRead(strIniFile, 'HotKeys', 'language'), ToggleLanguage)
+	}
+}
+
+CheckHotkey(strKey, message) {
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
+	try {
+		Hotkey(strKey, (*) => {})
+		return true
+	} catch as err {
+		MsgBox('Newer hotkey "' strKey '"' message '`nError: ' . err.Message, 'Hotkey error', 'Icon!')
+		return false
+	}
 }
 
 /** @description RefreshCommandList - Refresh Command List in ListView */
 RefreshCommandList() {
-    LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global objLvCommands, mapCommands
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
+    global lv1, mapCommands
 
-    if (objLvCommands = "") {
+    if (lv1 = "") {
         return
     }
 
-    objLvCommands.Delete()
+    lv1.Delete()
 
     for strPhrase, strActionData in mapCommands {
-        arrayParts := StrSplit(strActionData, "|", , 3)
+        arrayParts := StrSplit(strActionData, "|", , 2)
 
-        if (arrayParts.Length = 3) {
-            strGroup := arrayParts[1]
-            strType := arrayParts[2]
-            strAction := arrayParts[3]
-        } else if (arrayParts.Length = 2) {
-            strGroup := ""
+        if (arrayParts.Length = 2) {
             strType := arrayParts[1]
             strAction := arrayParts[2]
         } else {
-            strGroup := ""
             strType := ""
             strAction := strActionData
         }
 
-        objLvCommands.Add("", strPhrase, strGroup, strType, strAction)
+        lv1.Add("", strPhrase, strType, strAction)
     }
 }
 
 ; Command List Click - Populate Fields
-CommandListClick(ctrl, info) {
-    LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global objEdtWordsSaid, objEdtGroup, objDdlType, objEdtAction, intSelectedRow
+CommandListClick(*) {
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
+    global edtCommand, ddlType, edtAction, lv1, lv1Row
 
-    intSelectedRow := ctrl.GetNext(0, "Focused")
-    if (intSelectedRow > 0) {
-        strPhrase := ctrl.GetText(intSelectedRow, 1)
-        strGroup := ctrl.GetText(intSelectedRow, 2)
-        strType := ctrl.GetText(intSelectedRow, 3)
-        strAction := ctrl.GetText(intSelectedRow, 4)
-
-        objEdtWordsSaid.Value := strPhrase
-        objEdtGroup.Value := strGroup
-        objDdlType.Text := strType
-        objEdtAction.Value := strAction
+    lv1Row := lv1.GetNext(0, "Focused")
+    if (lv1Row > 0) {
+        edtCommand.Value	:= lv1.GetText(lv1Row, 1)
+        ddlType.Text		:= lv1.GetText(lv1Row, 2)
+        edtAction.Value		:= lv1.GetText(lv1Row, 3)
     }
 }
 
 ; Command List Double-Click
-CommandListDoubleClick(ctrl, info) {
-    CommandListClick(ctrl, info)
+CommandListDoubleClick(*) {
+    CommandListClick()
 }
 
 ; Add Command
 AddCommand(*) {
-    LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global objEdtWordsSaid, objEdtGroup, objDdlType, objEdtAction
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
+    global edtCommand, ddlType, edtAction
     global mapCommands, strIniFile
 
-    strPhrase := Trim(objEdtWordsSaid.Value)
-    strGroup := Trim(objEdtGroup.Value)
-    strType := objDdlType.Text
-    strAction := Trim(objEdtAction.Value)
+    strPhrase := Trim(edtCommand.Value)
+    strType := ddlType.Text
+    strAction := Trim(edtAction.Value)
 
     if (strPhrase = "" || strAction = "") {
         MsgBox("Please enter both 'Words Said' and 'Action'.", "Missing Input", "Icon!")
         return
     }
 
-    strActionData := strGroup "|" strType "|" strAction
+    strActionData := strType "|" strAction
     mapCommands[StrLower(strPhrase)] := strActionData
 
     ; Save to INI
@@ -414,25 +580,24 @@ AddCommand(*) {
     ; Rebuild grammar
     RebuildGrammar()
 
-    LogMsg(FFL(A_ThisFunc, A_LineNumber) . "Added command: " strPhrase " => " strActionData, 2)
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . "Added command: " strPhrase " => " strActionData, 2)
 }
 
 ; Edit Command
 EditCommand(*) {
-    LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global objEdtWordsSaid, objEdtGroup, objDdlType, objEdtAction
-    global objLvCommands, mapCommands, strIniFile, intSelectedRow
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
+    global edtCommand, ddlType, edtAction, lv1, lv1Row
+    global mapCommands, strIniFile
 
-    if (intSelectedRow < 1) {
+    if (lv1Row < 1) {
         MsgBox("Please select a command to edit.", "No Selection", "Icon!")
         return
     }
 
-    strOldPhrase := objLvCommands.GetText(intSelectedRow, 1)
-    strPhrase := Trim(objEdtWordsSaid.Value)
-    strGroup := Trim(objEdtGroup.Value)
-    strType := objDdlType.Text
-    strAction := Trim(objEdtAction.Value)
+    strOldPhrase := lv1.GetText(lv1Row, 1)
+    strPhrase := Trim(edtCommand.Value)
+    strType := ddlType.Text
+    strAction := Trim(edtAction.Value)
 
     if (strPhrase = "" || strAction = "") {
         MsgBox("Please enter both 'Words Said' and 'Action'.", "Missing Input", "Icon!")
@@ -445,7 +610,7 @@ EditCommand(*) {
         IniDelete(strIniFile, "Commands", strOldPhrase)
     }
 
-    strActionData := strGroup "|" strType "|" strAction
+    strActionData := strType "|" strAction
     mapCommands[StrLower(strPhrase)] := strActionData
 
     ; Save to INI
@@ -457,20 +622,20 @@ EditCommand(*) {
     ; Rebuild grammar
     RebuildGrammar()
 
-    LogMsg(FFL(A_ThisFunc, A_LineNumber) . "Updated command: " strPhrase " => " strActionData, 2)
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . "Updated command: " strPhrase " => " strActionData, 2)
 }
 
 ; Delete Command
 DeleteCommand(*) {
-    LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global objLvCommands, mapCommands, strIniFile, intSelectedRow
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
+    global mapCommands, strIniFile, lv1, lv1Row
 
-    if (intSelectedRow < 1) {
+    if (lv1Row < 1) {
         MsgBox("Please select a command to delete.", "No Selection", "Icon!")
         return
     }
 
-    strPhrase := objLvCommands.GetText(intSelectedRow, 1)
+    strPhrase := lv1.GetText(lv1Row, 1)
 
     intResult := MsgBox("Delete command: " strPhrase "?", "Confirm Delete", "YesNo Icon?")
     if (intResult = "No") {
@@ -486,138 +651,34 @@ DeleteCommand(*) {
     ; Rebuild grammar
     RebuildGrammar()
 
-    LogMsg(FFL(A_ThisFunc, A_LineNumber) . "Deleted command: " strPhrase, 2)
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . "Deleted command: " strPhrase, 2)
 }
 
 ; Clear Input Fields
 ClearFields(*) {
-    global objEdtWordsSaid, objEdtGroup, objDdlType, objEdtAction, intSelectedRow
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
+    global edtCommand, ddlType, edtAction, lv1Row
 
-    objEdtWordsSaid.Value := ""
-    objEdtGroup.Value := ""
-    objDdlType.Choose(0)
-    objEdtAction.Value := ""
-    intSelectedRow := 0
-}
-
-; Close Command Manager
-CmdManagerClose(*) {
-    LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global objCmdManagerGui
-
-    if (objCmdManagerGui != "") {
-        objCmdManagerGui.Destroy()
-        objCmdManagerGui := ""
-    }
+    edtCommand.Value := ""
+    ddlType.Choose(0)
+    edtAction.Value := ""
+    lv1Row := 0
 }
 
 ;============================================================
-; MICROPHONE SETTINGS GUI
+; START OF MICROPHONE SETTINGS IN HotkeyCmdMicGui
 ;============================================================
-
-/** @description ShowMicrophoneSettingsGui - Create and display microphone configuration interface */
-ShowMicrophoneSettingsGui(blnForceSelection := false) {
-    LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global objMicSettingsGui, objLvMicrophones, objProgressLevel
-    global objTxtLevelPercent, objTxtMicStatus, objTxtTestResult
-    global objRecognizer, intCurrentMicIndex, strCurrentMicName
-    global objSliderThreshold, objTxtThresholdValue, objChkshowConfidence
-    global fltConfidenceThreshold, blnShowConfidence
-
-    ; If GUI already exists, just show it
-    if (objMicSettingsGui != "") {
-        try {
-            objMicSettingsGui.Show()
-            return
-        }
-    }
-
-    objMicSettingsGui := Gui("+Resize -MaximizeBox", "Microphone Settings")
-    objMicSettingsGui.SetFont("s10", "Segoe UI")
-    objMicSettingsGui.OnEvent("Close", MicSettingsClose)
-
-    ; Instructions
-    if (blnForceSelection) {
-        objMicSettingsGui.AddText("w400", "No microphone configured. Please select your microphone:")
-    } else {
-        objMicSettingsGui.AddText("w400", "Select your microphone for voice recognition:")
-    }
-
-    ; Microphone list
-    objLvMicrophones := objMicSettingsGui.AddListView("w400 h150 -Multi", ["#", "Microphone Name"])
-    objLvMicrophones.OnEvent("Click", MicListClick)
-
-    ; Populate microphone list
-    try {
-        objAudioInputs := objRecognizer.GetAudioInputs()
-        Loop objAudioInputs.Count {
-            intIdx := A_Index - 1
-            strMicName := objAudioInputs.Item(intIdx).GetDescription()
-            objLvMicrophones.Add("", intIdx, strMicName)
-
-            ; Select current microphone
-            if (intIdx = intCurrentMicIndex) {
-                objLvMicrophones.Modify(A_Index, "+Select +Focus")
-            }
-        }
-    }
-
-    objLvMicrophones.ModifyCol(1, 30)
-    objLvMicrophones.ModifyCol(2, 360)
-
-    ; Current selection display
-    objMicSettingsGui.AddText("w400", "")
-    objTxtMicStatus := objMicSettingsGui.AddText("w400", "Current: " strCurrentMicName)
-
-    ; Audio level meter section
-    objMicSettingsGui.AddText("w400", "")
-    objMicSettingsGui.AddText("w400", "Audio Level (speak to test):")
-    objProgressLevel := objMicSettingsGui.AddProgress("w400 h20 Range0-100", 0)
-    objTxtLevelPercent := objMicSettingsGui.AddText("w400", "Level: 0%")
-
-    ; Confidence Threshold section
-    objMicSettingsGui.AddText("w400", "")
-    objMicSettingsGui.AddText("w400", "Confidence Threshold (reject below this %):")
-
-    intCurrentThreshold := Round(fltConfidenceThreshold * 100)
-    objSliderThreshold := objMicSettingsGui.AddSlider("w300 Range0-100 TickInterval10 AltSubmit", intCurrentThreshold)
-    objSliderThreshold.OnEvent("Change", ThresholdSliderChange)
-    objTxtThresholdValue := objMicSettingsGui.AddText("x+10 w50", intCurrentThreshold "%")
-
-    objMicSettingsGui.AddText("xs w400", "")
-    objChkshowConfidence := objMicSettingsGui.AddCheckbox("w400", "Show confidence % in recognition tooltip")
-    objChkshowConfidence.Value := blnShowConfidence
-
-    ; Test section
-    objMicSettingsGui.AddText("w400", "")
-    objMicSettingsGui.AddButton("w150", "Test Recognition").OnEvent("Click", TestMicRecognition)
-    objTxtTestResult := objMicSettingsGui.AddText("w400 h40", "Click 'Test Recognition' and speak...")
-
-    ; Buttons
-    objMicSettingsGui.AddText("w400", "")
-    objBtnSave := objMicSettingsGui.AddButton("w100", "Save")
-    objBtnSave.OnEvent("Click", SaveMicSettings)
-
-    if (!blnForceSelection) {
-        objBtnCancel := objMicSettingsGui.AddButton("x+10 w100", "Cancel")
-        objBtnCancel.OnEvent("Click", MicSettingsClose)
-    }
-
-    ; Start audio level monitoring
-    StartAudioLevelMonitor()
-
-    objMicSettingsGui.Show()
-}
 
 ; Threshold Slider Change Event
 ThresholdSliderChange(ctrl, *) {
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
     global objTxtThresholdValue
     objTxtThresholdValue.Text := ctrl.Value "%"
 }
 
 ; Microphone List Click Event
 MicListClick(ctrl, info) {
-    LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
     global objTxtMicStatus, objRecognizer, intCurrentMicIndex, strCurrentMicName
 
     intRow := ctrl.GetNext(0, "Focused")
@@ -633,22 +694,21 @@ MicListClick(ctrl, info) {
         try {
             objAudioInputs := objRecognizer.GetAudioInputs()
             objRecognizer.AudioInput := objAudioInputs.Item(intCurrentMicIndex)
-            LogMsg(FFL(A_ThisFunc, A_LineNumber) . "Switched to mic: " strName, 2)
+            LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . "Switched to mic: " strName, 2)
         } catch as err {
-            LogMsg(FFL(A_ThisFunc, A_LineNumber) . "Failed to switch mic: " err.Message, 4)
+            LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . "Failed to switch mic: " err.Message, 4)
         }
     }
 }
 
 ; Save Microphone Settings
 SaveMicSettings(*) {
-    LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global strIniFile, intCurrentMicIndex, strCurrentMicName, objMicSettingsGui
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
+    global strIniFile, intCurrentMicIndex, strCurrentMicName
     global objSliderThreshold, objChkshowConfidence
     global fltConfidenceThreshold, blnShowConfidence
 
     try {
-        IniWrite(intCurrentMicIndex, strIniFile, "Settings", "microphoneIndex")
         IniWrite(strCurrentMicName, strIniFile, "Settings", "microphoneName")
 
         ; Save confidence settings
@@ -659,36 +719,19 @@ SaveMicSettings(*) {
         IniWrite(intThreshold, strIniFile, "Settings", "confidenceThreshold")
         IniWrite(blnShowConfidence ? "1" : "0", strIniFile, "Settings", "showConfidence")
 
-        LogMsg(FFL(A_ThisFunc, A_LineNumber) . "Saved mic: [" intCurrentMicIndex "] " strCurrentMicName, 2)
-        LogMsg(FFL(A_ThisFunc, A_LineNumber) . "Saved threshold: " intThreshold "%, ShowConf: " blnShowConfidence, 2)
+        LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . "Saved mic: [" intCurrentMicIndex "] " strCurrentMicName, 2)
+        LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . "Saved threshold: " intThreshold "%, ShowConf: " blnShowConfidence, 2)
 
         MsgBox("Microphone settings saved!`n`nMicrophone: " strCurrentMicName "`nConfidence Threshold: " intThreshold "%", "Settings Saved", "Iconi")
     } catch as err {
-        LogMsg(FFL(A_ThisFunc, A_LineNumber) . "Failed to save: " err.Message, 4)
+        LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . "Failed to save: " err.Message, 4)
         MsgBox("Failed to save settings: " err.Message, "Error", "Icon!")
-    }
-
-    StopAudioLevelMonitor()
-    objMicSettingsGui.Destroy()
-    objMicSettingsGui := ""
-}
-
-; Close Microphone Settings
-MicSettingsClose(*) {
-    LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global objMicSettingsGui
-
-    StopAudioLevelMonitor()
-
-    if (objMicSettingsGui != "") {
-        objMicSettingsGui.Destroy()
-        objMicSettingsGui := ""
     }
 }
 
 ; Test Microphone Recognition
 TestMicRecognition(*) {
-    LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
     global objTxtTestResult, blnMicTestMode
 
     objTxtTestResult.Text := "Listening... Speak now!"
@@ -700,7 +743,7 @@ TestMicRecognition(*) {
 
 ; Reset Microphone Test
 ResetMicTest() {
-    LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
     global objTxtTestResult, blnMicTestMode
 
     if (blnMicTestMode) {
@@ -714,25 +757,16 @@ ResetMicTest() {
 }
 
 ;============================================================
+; END OF MICROPHONE SETTINGS IN HotkeyCmdMicGui
+;============================================================
+
+;============================================================
 ; AUDIO LEVEL MONITORING
 ;============================================================
 
-; Start Audio Level Monitor
-StartAudioLevelMonitor() {
-    LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
-    SetTimer(UpdateAudioLevel, 100)
-    LogMsg(FFL(A_ThisFunc, A_LineNumber) . "Audio Level Monitor Started", 2)
-}
-
-; Stop Audio Level Monitor
-StopAudioLevelMonitor() {
-    LogMsg(FFL(A_ThisFunc, A_LineNumber) . 'Started', 1)
-    SetTimer(UpdateAudioLevel, 0)
-    LogMsg(FFL(A_ThisFunc, A_LineNumber) . "Audio Level Monitor Stopped", 2)
-}
-
 ; Update Audio Level Display
 UpdateAudioLevel() {
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
     global objProgressLevel, objTxtLevelPercent, objRecognizer
 
     if (objProgressLevel = "" || objTxtLevelPercent = "") {
