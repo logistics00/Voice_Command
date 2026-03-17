@@ -114,7 +114,7 @@ UpdateTrayIcon() {
 /** @description ToggleListening - Toggle voice command listening state on/off */
 ToggleListening() {
     LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global objGrammar, objControlGrammar, blnListening, intTestMode
+    global objGrammar, objControlGrammar, blnListening, intTestMode, mapControlCommands
 
     if (intTestMode) {
         ToolTip("Cannot toggle in Test Mode")
@@ -125,21 +125,41 @@ ToggleListening() {
     blnListening := !blnListening
 
     if (blnListening) {
-        ; Enable both grammars
+        ; Enable grammars
         objGrammar.CmdSetRuleState("cmd", 1)
-        try { objControlGrammar.CmdSetRuleState("control", 1) }
+        if (mapControlCommands.Count > 0)
+            objControlGrammar.CmdSetRuleState("control", 1)
         ToolTip("🎤 Listening ON")
         LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . "Listening toggled ON via F1", 2)
     } else {
-        ; Disable both grammars
+        ; Disable grammars
         objGrammar.CmdSetRuleState("cmd", 0)
-        objControlGrammar.CmdSetRuleState("control", 0)
+        if (mapControlCommands.Count > 0)
+            objControlGrammar.CmdSetRuleState("control", 0)
         ToolTip("🔇 Listening OFF")
         LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . "Listening toggled OFF via F1", 2)
     }
 
     UpdateTrayIcon()
     SetTimer(() => ToolTip(), -2000)
+}
+
+/** @description ToggleTestMode - Toggle test mode on/off via F5
+    @details - In test mode commands are heard but NOT executed
+             - Orange status circle is the only indicator
+             - GUI opens on Tab 3 (Microphone) when ON; closes when OFF */
+ToggleTestMode(*) {
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
+    global intTestMode, goo
+    intTestMode := !intTestMode
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . "Test mode: " (intTestMode ? "ON" : "OFF"), 2)
+    if (intTestMode) {
+        HotkeyCmdMicGui(3)
+    } else {
+        if (goo != "")
+            HotkeyCmdMicGuiClose()
+    }
+    UpdateStatusCircle()
 }
 
 ;============================================================
@@ -162,12 +182,16 @@ GetStatusLabel() {
 
 /** @description GetStatusColor - Return circle color for the current voice mode
     @returns {string} - Hex color code without '#'
-    @details - strVoiceMode drives color: sapi=blue, vosk=green, whisper=purple
+    @details - intTestMode=true overrides all: orange regardless of mode
+             - strVoiceMode drives color: sapi=blue, vosk=green, whisper=purple
              - blnListening=false overrides to red regardless of mode */
 GetStatusColor() {
     LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global blnListening, strVoiceMode
-    global strColorListening, strColorNotListening, strColorVosk, strColorWhisper
+    global blnListening, intTestMode, strVoiceMode
+    global strColorListening, strColorNotListening, strColorTestMode, strColorVosk, strColorWhisper
+
+    if (intTestMode)
+        return strColorTestMode         ; Orange — test mode active
 
     if (!blnListening)
         return strColorNotListening     ; Red — F1 listening OFF
@@ -258,7 +282,7 @@ ShowCircle(circleSize := 50, circleColor := "FF0000", xPos := "", yPos := "", st
 }
 
 ;============================================================
-; COMMAND MANAGER GUI
+; HotkeyCmdMic GUI
 ;============================================================
 
 /** @description HotkeyCmdMicGui - Show the unified Hotkeys/Commands/Microphone GUI
@@ -293,19 +317,9 @@ HotkeyCmdMicGui(defaultTab := 1) {
     goo.SetFont('s12 w700', 'Calibri')
     goo.OnEvent('Close', HotkeyCmdMicGuiClose)
 
-    ; ; Tab control — must be added before all tab content
-    ; tab := goo.AddTab3('x0 y0 w' guiWidth, ['Commands', 'Microphone'])
-    ; tab.OnEvent('Change', TabChanged)
-    ; objManagerTab := tab
-
-    ; ;----------------------------------------------------------
-    ; ; TAB 1 — Commands (Hotkeys + Add/Edit + ListView)
-    ; ;----------------------------------------------------------
-    ; tab.UseTab(1)
     ; Tab control — must be added before all tab content
     tab := goo.AddTab3('x10 y+m w' guiWidth, ['Hotkeys', 'Commands', 'Microphone'])
     tab.OnEvent('Change', (ctrl, *) => SetTimer(UpdateAudioLevel, ctrl.Value = 3 ? 100 : 0))
-    ; objManagerTab := tab
 
     ;----------------------------------------------------------
     ; TAB 1 — Commands (Hotkeys + Add/Edit + ListView)
@@ -369,8 +383,6 @@ HotkeyCmdMicGui(defaultTab := 1) {
     cbLanguageShift.OnEvent('Click', (*) => UpdateHotkey(cbLanguageShift, edtLanguage, '+', 'language'))
     cbLanguageAlt.OnEvent('Click', (*) => UpdateHotkey(cbLanguageAlt, edtLanguage, '!', 'language'))
 
-	; goo.AddGroupBox('x30 y50 r7 w850', 'Hotkeys')
-
     tab.UseTab(2)
 
     goo.AddText("x30 y+m", "Command:")
@@ -394,17 +406,11 @@ HotkeyCmdMicGui(defaultTab := 1) {
     lv1.OnEvent("Click", CommandListClick)
     lv1.OnEvent("DoubleClick", CommandListDoubleClick)
 
-    ; goo.AddGroupBox('x30 y50 r4 w900', 'Add / Edit Command')
-
     RefreshCommandList()
 
     lv1.ModifyCol(1, '150 sort')
     lv1.ModifyCol(2, '100 sort')
     lv1.ModifyCol(3, widthCol4)
-    ; lv1.ModifyCol(1, widthCol1)
-    ; lv1.ModifyCol(2, widthCol1)
-    ; lv1.ModifyCol(3, widthCol4)
-    ; lv1.ModifyCol(4, widthCol4)
 
     ;----------------------------------------------------------
     ; TAB 2 — Microphone Settings
@@ -755,10 +761,6 @@ ResetMicTest() {
         }
     }
 }
-
-;============================================================
-; END OF MICROPHONE SETTINGS IN HotkeyCmdMicGui
-;============================================================
 
 ;============================================================
 ; AUDIO LEVEL MONITORING

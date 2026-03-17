@@ -36,10 +36,7 @@ InitializeVoiceRecognition() {
 
         mapCommands := LoadCommandsFromIni()
 
-        intTestMode := Integer(IniRead(strIniFile, "Settings", "testMode", "0"))
-        LogMsg(FFL('VC_Core', A_ThisFunc, A_LineNumber) . "Test Mode: " (intTestMode ? "ON" : "OFF"), 2)
-
-        if (!intTestMode && mapCommands.Count < 1) {
+        if (mapCommands.Count < 1) {
             LogMsg(FFL('VC_Core', A_ThisFunc, A_LineNumber) . "No commands found")
             MsgBox("No commands found in INI file.", "Error", "Icon!")
             ExitApp()
@@ -93,39 +90,31 @@ InitializeVoiceRecognition() {
         objGrammar := objContext.CreateGrammar(1)        ; Main grammar (ID=1)
         objControlGrammar := objContext.CreateGrammar(2) ; Control grammar (ID=2)
 
-        if (intTestMode) {
-            LogMsg(FFL('VC_Core', A_ThisFunc, A_LineNumber) . "Loading DICTATION grammar", 2)
-            objGrammar.DictationLoad()
-            objGrammar.DictationSetState(1)
+        ; Build and load MAIN grammar (user commands + built-in)
+        strMainGrammarFile := A_Temp "\voice_grammar_main.xml"
+        BuildGrammarFile(mapCommands, mapBuiltInCommands, strMainGrammarFile)
+        objGrammar.CmdLoadFromFile(strMainGrammarFile, 0)
 
-            MsgBox("DICTATION TEST MODE`n`nMicrophone: " strCurrentMicName, "Test Mode", "Iconi")
-        } else {
-            ; Build and load MAIN grammar (user commands + built-in)
-            strMainGrammarFile := A_Temp "\voice_grammar_main.xml"
-            BuildGrammarFile(mapCommands, mapBuiltInCommands, strMainGrammarFile)
-            objGrammar.CmdLoadFromFile(strMainGrammarFile, 0)
-
-            ; Build and load CONTROL grammar (only when there are control commands)
-            if (mapControlCommands.Count > 0) {
-                strControlGrammarFile := A_Temp "\voice_grammar_control.xml"
-                BuildControlGrammarFile(strControlGrammarFile)
-                objControlGrammar.CmdLoadFromFile(strControlGrammarFile, 0)
-                objControlGrammar.CmdSetRuleState("control", 1)
-            }
-
-            ; Enable main grammar
-            objGrammar.CmdSetRuleState("cmd", 1)
-
-            blnListening := true
-            LogMsg(FFL('VC_Core', A_ThisFunc, A_LineNumber) . "Listening: ON", 2)
-
-            UpdateTrayIcon()
-
-            intTotalCmds := mapCommands.Count + mapBuiltInCommands.Count
-            intThresholdPct := Round(fltConfidenceThreshold * 100)
-
-            MsgBox("Voice command listener active.`n`nMicrophone: " strCurrentMicName "`nConfidence Threshold: " intThresholdPct "%`nLogging: " (blnLogEnabled ? "ON" : "OFF") "`nCommands: " intTotalCmds "`n`nPress F1 to toggle listening ON/OFF.`nSay 'list commands' to see all commands.`nRight-click tray icon for menu.", "Voice Command Ready", "Iconi")
+        ; Build and load CONTROL grammar (only when there are control commands)
+        if (mapControlCommands.Count > 0) {
+            strControlGrammarFile := A_Temp "\voice_grammar_control.xml"
+            BuildControlGrammarFile(strControlGrammarFile)
+            objControlGrammar.CmdLoadFromFile(strControlGrammarFile, 0)
+            objControlGrammar.CmdSetRuleState("control", 1)
         }
+
+        ; Enable main grammar
+        objGrammar.CmdSetRuleState("cmd", 1)
+
+        blnListening := true
+        LogMsg(FFL('VC_Core', A_ThisFunc, A_LineNumber) . "Listening: ON", 2)
+
+        UpdateTrayIcon()
+
+        intTotalCmds := mapCommands.Count + mapBuiltInCommands.Count
+        intThresholdPct := Round(fltConfidenceThreshold * 100)
+
+        MsgBox("Voice command listener active.`n`nMicrophone: " strCurrentMicName "`nConfidence Threshold: " intThresholdPct "%`nLogging: " (blnLogEnabled ? "ON" : "OFF") "`nCommands: " intTotalCmds "`n`nPress F1 to toggle listening ON/OFF.`nPress F5 to toggle test mode (orange circle).`nSay 'list commands' to see all commands.`nRight-click tray icon for menu.", "Voice Command Ready", "Iconi")
 
         LogMsg(FFL('VC_Core', A_ThisFunc, A_LineNumber) . "Voice command listener started", 2)
 
@@ -351,7 +340,7 @@ class VoiceEventSink {
                     SetTimer(() => ToolTip(), -3000)
 
                     if (intTestMode) {
-                        MsgBox("SAPI heard: " strText "`nConfidence: " intConfPct "%", "Dictation Test")
+                        MsgBox("Command heard: " strText "`nConfidence: " intConfPct "%`n`nNOT executed (test mode)", "Command Test")
                     } else {
                         VoiceHandler(arg)
                     }

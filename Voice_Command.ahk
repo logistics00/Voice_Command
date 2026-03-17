@@ -111,10 +111,11 @@ global intIconNotListeningNum := 69
 global objStatusCircle := ""
 global intCircleSize := 30
 global intCircleMargin := 20
-global strColorListening := "0088FF"    ; Blue  — SAPI active
-global strColorNotListening := "FF0000" ; Red   — listening OFF (F1)
+global strColorListening := "0088FF"    ; Blue   — SAPI active
+global strColorNotListening := "FF0000" ; Red    — listening OFF (F1)
 global strColorVosk := "00CC44"         ; Green  — Vosk mode
-global strColorWhisper := "9900CC"      ; Purple — Whisper mode (Phase 2)
+global strColorWhisper := "9900CC"      ; Purple — Whisper mode
+global strColorTestMode := "FFA500"     ; Orange — test mode active
 
 ; Command Manager / Microphone GUI globals
 global goo := ""
@@ -209,8 +210,12 @@ HotKey(IniRead(strIniFile, 'HotKeys', 'modus', 'F3'), CycleVoiceMode)
 ; F3:: CycleVoiceMode()
 
 ; F4 Hotkey - Toggle Vosk language (default/special)
-HotKey(IniRead(strIniFile, 'HotKeys', 'language', 'F1'), ToggleLanguage)
+HotKey(IniRead(strIniFile, 'HotKeys', 'language', 'F4'), ToggleLanguage)
 ; Hotkey('^!s', ToggleListening())
 ; F4:: ToggleLanguage()
+
+; F5 Hotkey - Toggle Test Mode on/off
+HotKey(IniRead(strIniFile, 'HotKeys', 'testMode', 'F5'), ToggleTestMode)
+; F5:: ToggleTestMode()
 
 ;================= End of VOICECOMMAND Entry Point =================
