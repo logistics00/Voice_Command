@@ -13,7 +13,7 @@
 InitializeVoiceRecognition() {
     LogMsg(FFL('VC_Core', A_ThisFunc, A_LineNumber) . 'Started', 1)
     global objRecognizer, objContext, objGrammar, objControlGrammar, objEventSink
-    global mapCommands, mapBuiltInCommands, mapControlCommands, intTestMode, blnLogEnabled, blnListening
+    global mapCommands, mapBuiltInCommands, mapControlCommands, blnLogEnabled, blnListening
     global intCurrentMicIndex, strCurrentMicName
     global fltConfidenceThreshold, blnShowConfidence
     global strLangId, strIniFile, objManagerTab
@@ -73,9 +73,7 @@ InitializeVoiceRecognition() {
             strCurrentMicName := objAudioInputs.Item(0).GetDescription()
             objRecognizer.AudioInput := objAudioInputs.Item(0)
 
-            HotkeyCmdMicGui()
-            objManagerTab.Value := 2
-			SetTimer(UpdateAudioLevel, 100)
+            HotkeyCmdMicGui(3)
         }
 
         objRecognizer.AudioInput := objAudioInputs.Item(intCurrentMicIndex)
@@ -114,7 +112,7 @@ InitializeVoiceRecognition() {
         intTotalCmds := mapCommands.Count + mapBuiltInCommands.Count
         intThresholdPct := Round(fltConfidenceThreshold * 100)
 
-        MsgBox("Voice command listener active.`n`nMicrophone: " strCurrentMicName "`nConfidence Threshold: " intThresholdPct "%`nLogging: " (blnLogEnabled ? "ON" : "OFF") "`nCommands: " intTotalCmds "`n`nPress F1 to toggle listening ON/OFF.`nPress F5 to toggle test mode (orange circle).`nSay 'list commands' to see all commands.`nRight-click tray icon for menu.", "Voice Command Ready", "Iconi")
+        MsgBox("Voice command listener active.`n`nMicrophone: " strCurrentMicName "`nConfidence Threshold: " intThresholdPct "%`nLogging: " (blnLogEnabled ? "ON" : "OFF") "`nCommands: " intTotalCmds "`n`nPress F1 to toggle listening ON/OFF.`nSay 'list commands' to see all commands.`nRight-click tray icon for menu.", "Voice Command Ready", "Iconi")
 
         LogMsg(FFL('VC_Core', A_ThisFunc, A_LineNumber) . "Voice command listener started", 2)
 
@@ -293,7 +291,7 @@ class VoiceEventSink {
     /** @description HandleRecognition - Process successful voice recognition and filter by confidence */
     HandleRecognition(args) {
         LogMsg(FFL('VC_Core', A_ThisFunc, A_LineNumber) . 'Started', 1)
-        global intTestMode, fltConfidenceThreshold, blnShowConfidence
+        global fltConfidenceThreshold, blnShowConfidence
 
         for intIndex, arg in args {
             try {
@@ -337,11 +335,7 @@ class VoiceEventSink {
                         pool.ShowByMouse('Heard: ' strText, 3000)
                     }
 
-                    if (intTestMode) {
-                        MsgBox("Command heard: " strText "`nConfidence: " intConfPct "%`n`nNOT executed (test mode)", "Command Test")
-                    } else {
-                        VoiceHandler(arg)
-                    }
+                    VoiceHandler(arg)
                     return
                 }
             }

@@ -114,12 +114,7 @@ UpdateTrayIcon() {
 /** @description ToggleListening - Toggle voice command listening state on/off */
 ToggleListening() {
     LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global objGrammar, objControlGrammar, blnListening, intTestMode, mapControlCommands
-
-    if (intTestMode) {
-        pool.ShowByMouse('Cannot toggle in Test Mode', 2000)
-        return
-    }
+    global objGrammar, objControlGrammar, blnListening, mapControlCommands
 
     blnListening := !blnListening
 
@@ -142,24 +137,6 @@ ToggleListening() {
     UpdateTrayIcon()
 }
 
-/** @description ToggleTestMode - Toggle test mode on/off via F5
-    @details - In test mode commands are heard but NOT executed
-             - Orange status circle is the only indicator
-             - GUI opens on Tab 3 (Microphone) when ON; closes when OFF */
-ToggleTestMode(*) {
-    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global intTestMode, goo
-    intTestMode := !intTestMode
-    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . "Test mode: " (intTestMode ? "ON" : "OFF"), 2)
-    if (intTestMode) {
-        HotkeyCmdMicGui(3)
-    } else {
-        if (goo != "")
-            HotkeyCmdMicGuiClose()
-    }
-    UpdateStatusCircle()
-}
-
 ;============================================================
 ; STATUS CIRCLE OVERLAY
 ;============================================================
@@ -180,16 +157,12 @@ GetStatusLabel() {
 
 /** @description GetStatusColor - Return circle color for the current voice mode
     @returns {string} - Hex color code without '#'
-    @details - intTestMode=true overrides all: orange regardless of mode
-             - strVoiceMode drives color: sapi=blue, vosk=green, whisper=purple
+    @details - strVoiceMode drives color: sapi=blue, vosk=green, whisper=purple
              - blnListening=false overrides to red regardless of mode */
 GetStatusColor() {
     LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global blnListening, intTestMode, strVoiceMode
-    global strColorListening, strColorNotListening, strColorTestMode, strColorVosk, strColorWhisper
-
-    if (intTestMode)
-        return strColorTestMode         ; Orange — test mode active
+    global blnListening, strVoiceMode
+    global strColorListening, strColorNotListening, strColorVosk, strColorWhisper
 
     if (!blnListening)
         return strColorNotListening     ; Red — F1 listening OFF
@@ -292,14 +265,11 @@ HotkeyCmdMicGui(defaultTab := 1) {
     global mapCommands, lv1, lv1Row
     global strIniFile
     global objRecognizer, intCurrentMicIndex, strCurrentMicName
-    global objProgressLevel, objTxtLevelPercent, objTxtMicStatus, objTxtTestResult
-    global objSliderThreshold, objTxtThresholdValue, objChkshowConfidence
-    global fltConfidenceThreshold, blnShowConfidence
+    global objTxtMicStatus
 
     ; If GUI already exists, switch to requested tab and show
     if (goo != "") {
         objManagerTab.Value := defaultTab
-        SetTimer(UpdateAudioLevel, defaultTab = 3 ? 100 : 0)
         goo.Show()
         return
     }
@@ -317,7 +287,6 @@ HotkeyCmdMicGui(defaultTab := 1) {
 
     ; Tab control — must be added before all tab content
     tab := goo.AddTab3('x10 y+m w' guiWidth, ['Hotkeys', 'Commands', 'Microphone'])
-    tab.OnEvent('Change', (ctrl, *) => SetTimer(UpdateAudioLevel, ctrl.Value = 3 ? 100 : 0))
 
     ;----------------------------------------------------------
     ; TAB 1 — Commands (Hotkeys + Add/Edit + ListView)
@@ -433,26 +402,10 @@ HotkeyCmdMicGui(defaultTab := 1) {
     lv2.ModifyCol(1, 30)
     lv2.ModifyCol(2, 360)
 
-    goo.AddText('x30 y+m+30', 'Audio Level (speak to test):')
-    objProgressLevel := goo.AddProgress('x+m yp w400 h20 Range0-100 Background0x00F0F0', 0)
-    objTxtLevelPercent := goo.AddText('x+m yp', 'Level: 0%')
-
-    goo.AddText('x30 y+m+30', 'Confidence Threshold (reject below this %):')
-    intCurrentThreshold := Round(fltConfidenceThreshold * 100)
-    objSliderThreshold := goo.AddSlider('x+m yp w300 Range0-100 TickInterval10 AltSubmit Background0x00F0F0', intCurrentThreshold)
-    objSliderThreshold.OnEvent('Change', ThresholdSliderChange)
-    objTxtThresholdValue := goo.AddText('x+m yp w50', intCurrentThreshold '%')
-
-    objChkshowConfidence := goo.AddCheckbox('x30 y+m+10', 'Show confidence % in recognition tooltip')
-    objChkshowConfidence.Value := blnShowConfidence
-    goo.AddButton('x+m yp w150 h30', 'Test Recognition').OnEvent('Click', TestMicRecognition)
-    objTxtTestResult := goo.AddText('x+m yp h40', "Click 'Test Recognition' and speak...")
-
     goo.AddButton('x30 y+m+30 h30', 'Save Microphone Settings').OnEvent('Click', SaveMicSettings)
 
     tab.UseTab(0)											; close construction context
     tab.Value := defaultTab									; select correct tab
-    SetTimer(UpdateAudioLevel, defaultTab = 3 ? 100 : 0)	; start monitor if Mic tab
     goo.Show('AutoSize Center')
 }
 
@@ -470,11 +423,10 @@ UpdateHotkey(cb, edt, token, type) {
     LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 2)
 }
 
-/** @description HotkeyCmdMicGuiClose - Close handler: stop audio monitor and destroy GUI */
+/** @description HotkeyCmdMicGuiClose - Close handler: destroy GUI */
 HotkeyCmdMicGuiClose(*) {
     LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
     global goo
-    SetTimer(UpdateAudioLevel, 0)
     goo.Destroy()
     goo := ""
 }
@@ -669,17 +621,6 @@ ClearFields(*) {
     lv1Row := 0
 }
 
-;============================================================
-; START OF MICROPHONE SETTINGS IN HotkeyCmdMicGui
-;============================================================
-
-; Threshold Slider Change Event
-ThresholdSliderChange(ctrl, *) {
-    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global objTxtThresholdValue
-    objTxtThresholdValue.Text := ctrl.Value "%"
-}
-
 ; Microphone List Click Event
 MicListClick(ctrl, info) {
     LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
@@ -709,82 +650,16 @@ MicListClick(ctrl, info) {
 SaveMicSettings(*) {
     LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
     global strIniFile, intCurrentMicIndex, strCurrentMicName
-    global objSliderThreshold, objChkshowConfidence
-    global fltConfidenceThreshold, blnShowConfidence
 
     try {
         IniWrite(strCurrentMicName, strIniFile, "Settings", "microphoneName")
 
-        ; Save confidence settings
-        intThreshold := objSliderThreshold.Value
-        fltConfidenceThreshold := intThreshold / 100
-        blnShowConfidence := objChkshowConfidence.Value
-
-        IniWrite(intThreshold, strIniFile, "Settings", "confidenceThreshold")
-        IniWrite(blnShowConfidence ? "1" : "0", strIniFile, "Settings", "showConfidence")
-
         LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . "Saved mic: [" intCurrentMicIndex "] " strCurrentMicName, 2)
-        LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . "Saved threshold: " intThreshold "%, ShowConf: " blnShowConfidence, 2)
 
-        MsgBox("Microphone settings saved!`n`nMicrophone: " strCurrentMicName "`nConfidence Threshold: " intThreshold "%", "Settings Saved", "Iconi")
+        MsgBox("Microphone settings saved!`n`nMicrophone: " strCurrentMicName, "Settings Saved", "Iconi")
     } catch as err {
         LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . "Failed to save: " err.Message, 4)
         MsgBox("Failed to save settings: " err.Message, "Error", "Icon!")
-    }
-}
-
-; Test Microphone Recognition
-TestMicRecognition(*) {
-    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global objTxtTestResult, blnMicTestMode
-
-    objTxtTestResult.Text := "Listening... Speak now!"
-    blnMicTestMode := true
-
-    ; Set a timeout to reset
-    SetTimer(ResetMicTest, -5000)
-}
-
-; Reset Microphone Test
-ResetMicTest() {
-    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global objTxtTestResult, blnMicTestMode
-
-    if (blnMicTestMode) {
-        blnMicTestMode := false
-        if (objTxtTestResult != "") {
-            try {
-                objTxtTestResult.Text := "No speech detected. Try again or check microphone."
-            }
-        }
-    }
-}
-
-;============================================================
-; AUDIO LEVEL MONITORING
-;============================================================
-
-; Update Audio Level Display
-UpdateAudioLevel() {
-    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global objProgressLevel, objTxtLevelPercent, objRecognizer
-
-    if (objProgressLevel = "" || objTxtLevelPercent = "") {
-        return
-    }
-
-    try {
-        ; Get audio level from recognizer status
-        objStatus := objRecognizer.Status
-        intLevel := objStatus.AudioStatus.AudioLevel
-
-        ; AudioLevel is 0-100
-        intPercent := Min(100, Max(0, intLevel))
-
-        objProgressLevel.Value := intPercent
-        objTxtLevelPercent.Text := "Level: " intPercent "%"
-    } catch {
-        ; Ignore errors during level monitoring
     }
 }
 

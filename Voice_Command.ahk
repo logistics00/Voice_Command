@@ -85,7 +85,6 @@ global mapBuiltInCommands := Map()
 global mapControlCommands := Map()
 
 ; State Flags
-global intTestMode := 0
 global blnLogEnabled := true
 global blnListening := true
 
@@ -115,7 +114,6 @@ global strColorListening := '0088FF'    ; Blue   — SAPI active
 global strColorNotListening := 'FF0000' ; Red    — listening OFF (F1)
 global strColorVosk := '00CC44'         ; Green  — Vosk mode
 global strColorWhisper := '9900CC'      ; Purple — Whisper mode
-global strColorTestMode := 'FFA500'     ; Orange — test mode active
 
 ; Command Manager / Microphone GUI globals
 global goo := ''
@@ -127,13 +125,9 @@ global edtAction := ''
 global lv1Row := 0
 
 ; Microphone Settings GUI globals
-global objProgressLevel := ''
-global objTxtLevelPercent := ''
 global objTxtMicStatus := ''
-global objTxtTestResult := ''
 global intCurrentMicIndex := 0
 global strCurrentMicName := ''
-global blnMicTestMode := false
 
 ; Confidence Threshold settings
 global fltConfidenceThreshold := 0.40
@@ -141,9 +135,6 @@ global blnShowConfidence := true
 
 ; SAPI Speak Mode (0=log only, 1=tooltip+log for Hypothesis/FalseRecognition)
 global intSapiSpeakMode := 0
-global objSliderThreshold := ''
-global objTxtThresholdValue := ''
-global objChkshowConfidence := ''
 
 ; Dynamic SAPI language detection
 global strLangId := ''
@@ -232,9 +223,5 @@ HotKey(IniRead(strIniFile, 'HotKeys', 'modus', 'F3'), CycleVoiceMode)
 HotKey(IniRead(strIniFile, 'HotKeys', 'language', 'F4'), ToggleLanguage)
 ; Hotkey('^!s', ToggleListening())
 ; F4:: ToggleLanguage()
-
-; F5 Hotkey - Toggle Test Mode on/off
-HotKey(IniRead(strIniFile, 'HotKeys', 'testMode', 'F5'), ToggleTestMode)
-; F5:: ToggleTestMode()
 
 ;================= End of VOICECOMMAND Entry Point =================

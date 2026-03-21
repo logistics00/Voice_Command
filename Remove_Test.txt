@@ -104,3 +104,12 @@ Tab 3 stays   : mic selection listview + objTxtMicStatus + Save button remain
 Kept          : fltConfidenceThreshold, blnShowConfidence (still used by Core recognition)
 Kept          : MicListClick, SaveMicSettings (simplified), objTxtMicStatus
 Not affected  : intCurrentMicIndex, strCurrentMicName, objRecognizer (still used by SAPI init)
+
+Clean. All 31 plan items implemented, plus the stale SetTimer(UpdateAudioLevel, 0) in CleanupVoice that the plan hadn't listed. Summary:
+	- Voice_Command.ahk — removed 6 globals + F5 hotkey block
+	- Voice_Command.ini — removed testMode=F5
+	- lib\Voice_Command_UI.ahk — removed ToggleTestMode, test-mode guard in ToggleListening, orange color from GetStatusColor, 
+		all audio/slider/checkbox/test controls from Tab 3, 4 functions (ThresholdSliderChange, TestMicRecognition, ResetMicTest,
+		UpdateAudioLevel), simplified SaveMicSettings and HotkeyCmdMicGuiClose
+	- lib\Voice_Command_Core.ahk — removed intTestMode from globals, SHOW_GUI cleanup, F5 from startup MsgBox, if (intTestMode) block in HandleRecognition
+	- lib\Voice_Command_Utils.ahk — removed testMode from CreateDefaultIni, removed stale SetTimer(UpdateAudioLevel, 0) from CleanupVoice

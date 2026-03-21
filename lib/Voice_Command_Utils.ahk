@@ -30,7 +30,6 @@ CreateDefaultIni() {
 
     try {
         IniWrite("", strIniFile, "Settings", "microphoneName")
-        IniWrite("0", strIniFile, "Settings", "testMode")
         IniWrite("7", strIniFile, "Settings", "loggingType")
         IniWrite("40", strIniFile, "Settings", "confidenceThreshold")
         IniWrite("1", strIniFile, "Settings", "showConfidence")
@@ -137,7 +136,6 @@ CleanupVoice(exitReason, exitCode) {
     LogMsg(FFL('VC_Utils', A_ThisFunc, A_LineNumber) . "Voice command listener stopped (" exitReason ")", 2)
 
     BridgeDisconnect()
-	SetTimer(UpdateAudioLevel, 0)
 
     if (objStatusCircle != "") {
         try {
