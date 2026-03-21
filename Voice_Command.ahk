@@ -156,10 +156,10 @@ global intLoggingType := 0
 ;============================================================
 #Include <Peep_v2>				; Library			- for displaying the contnts of AHK-vars
 #Include <Xtooltip>				; Library			- for displaying tooltips
-#Include <Project\Voice_Command_UI>		; User Interface	- uses Utils but not Core
-#Include <Project\Voice_Command_Utils>	; Utilities			- no dependencies on other modules
-#Include <Project\Voice_Command_Bridge>	; TCP				- connection to Python voice bridge
-#Include <Project\Voice_Command_Core>	; Core SAPI engine	- uses Utils and UI functions
+#Include <Voice_Command_UI>		; User Interface	- uses Utils but not Core
+#Include <Voice_Command_Utils>	; Utilities			- no dependencies on other modules
+#Include <Voice_Command_Bridge>	; TCP				- connection to Python voice bridge
+#Include <Voice_Command_Core>	; Core SAPI engine	- uses Utils and UI functions
 
 ;============================================================
 ; INITIALIZATION
