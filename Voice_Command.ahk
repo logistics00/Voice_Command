@@ -69,15 +69,15 @@ Persistent
 ;============================================================
 
 ; SAPI Objects
-global objRecognizer := ""
-global objContext := ""
-global objGrammar := ""
-global objControlGrammar := ""  ; Separate grammar for start/stop
-global objEventSink := ""
+global objRecognizer := ''
+global objContext := ''
+global objGrammar := ''
+global objControlGrammar := ''  ; Separate grammar for start/stop
+global objEventSink := ''
 
 ; Paths
-global strLogFile := A_ScriptDir "\Voice_Command.log"
-global strIniFile := A_ScriptDir "\Voice_Command.ini"
+global strLogFile := A_ScriptDir '\Voice_Command.log'
+global strIniFile := A_ScriptDir '\Voice_Command.ini'
 
 ; Command Maps
 global mapCommands := Map()
@@ -90,49 +90,49 @@ global blnLogEnabled := true
 global blnListening := true
 
 ; Voice mode: sapi | vosk | whisper
-global strVoiceMode := "sapi"
-global speakLanguage := "default"   ; default = English, special = localLanguage= from INI
-global strSpecialLanguage := ""     ; e.g. "nl" — read from INI at bridge startup
+global strVoiceMode := 'sapi'
+global speakLanguage := 'default'   ; default = English, special = localLanguage= from INI
+global strSpecialLanguage := ''     ; e.g. 'nl' — read from INI at bridge startup
 
 ; TCP Bridge (Winsock client)
 global intTcpSocket := 0
 global intBridgePid := 0
-global strTcpBuffer := ""
-global strTcpHost := "127.0.0.1"
+global strTcpBuffer := ''
+global strTcpHost := '127.0.0.1'
 global intTcpPort := 7891
 
 ; Icon paths for listening state (system DLL icons)
-global strIconListening := "C:\WINDOWS\system32\aclui.dll"
+global strIconListening := 'C:\WINDOWS\system32\aclui.dll'
 global intIconListeningNum := 4
-global strIconNotListening := "C:\WINDOWS\system32\compstui.dll"
+global strIconNotListening := 'C:\WINDOWS\system32\compstui.dll'
 global intIconNotListeningNum := 69
 
 ; Status Circle Overlay settings
-global objStatusCircle := ""
+global objStatusCircle := ''
 global intCircleSize := 30
 global intCircleMargin := 20
-global strColorListening := "0088FF"    ; Blue   — SAPI active
-global strColorNotListening := "FF0000" ; Red    — listening OFF (F1)
-global strColorVosk := "00CC44"         ; Green  — Vosk mode
-global strColorWhisper := "9900CC"      ; Purple — Whisper mode
-global strColorTestMode := "FFA500"     ; Orange — test mode active
+global strColorListening := '0088FF'    ; Blue   — SAPI active
+global strColorNotListening := 'FF0000' ; Red    — listening OFF (F1)
+global strColorVosk := '00CC44'         ; Green  — Vosk mode
+global strColorWhisper := '9900CC'      ; Purple — Whisper mode
+global strColorTestMode := 'FFA500'     ; Orange — test mode active
 
 ; Command Manager / Microphone GUI globals
-global goo := ""
-global objManagerTab := ""
-global lv1 := ""
-global edtCommand := ""
-global ddlType := ""
-global edtAction := ""
+global goo := ''
+global objManagerTab := ''
+global lv1 := ''
+global edtCommand := ''
+global ddlType := ''
+global edtAction := ''
 global lv1Row := 0
 
 ; Microphone Settings GUI globals
-global objProgressLevel := ""
-global objTxtLevelPercent := ""
-global objTxtMicStatus := ""
-global objTxtTestResult := ""
+global objProgressLevel := ''
+global objTxtLevelPercent := ''
+global objTxtMicStatus := ''
+global objTxtTestResult := ''
 global intCurrentMicIndex := 0
-global strCurrentMicName := ""
+global strCurrentMicName := ''
 global blnMicTestMode := false
 
 ; Confidence Threshold settings
@@ -141,9 +141,9 @@ global blnShowConfidence := true
 
 ; SAPI Speak Mode (0=log only, 1=tooltip+log for Hypothesis/FalseRecognition)
 global intSapiSpeakMode := 0
-global objSliderThreshold := ""
-global objTxtThresholdValue := ""
-global objChkshowConfidence := ""
+global objSliderThreshold := ''
+global objTxtThresholdValue := ''
+global objChkshowConfidence := ''
 
 ; Dynamic SAPI language detection
 global strLangId := ''
@@ -154,7 +154,8 @@ global intLoggingType := 0
 ;============================================================
 ; INCLUDE MODULES (order matters!)
 ;============================================================
-#Include <General\Peep_v2>				; Library			- for displaying the contnts of AHK-vars
+#Include <Peep_v2>				; Library			- for displaying the contnts of AHK-vars
+#Include <Xtooltip>				; Library			- for displaying tooltips
 #Include <Project\Voice_Command_UI>		; User Interface	- uses Utils but not Core
 #Include <Project\Voice_Command_Utils>	; Utilities			- no dependencies on other modules
 #Include <Project\Voice_Command_Bridge>	; TCP				- connection to Python voice bridge
@@ -164,15 +165,33 @@ global intLoggingType := 0
 ; INITIALIZATION
 ;============================================================
 
+; Create a theme
+theme := XttTheme('MyTheme', {
+      BackColor: XttRgb(100, 0, 0)
+    , FaceName: IniRead(strIniFile, 'ToolTip', 'faceName')
+    , FontSize: IniRead(strIniFile, 'ToolTip', 'fontSize')
+    , Quality: 5
+    , Margin: XttRect.Margin(IniRead(strIniFile, 'ToolTip', 'margin'))
+    , MaxWidth: IniRead(strIniFile, 'ToolTip', 'maxWidth')
+    , TextColor: XttRgb(0, 255, 255)
+    , Weight: IniRead(strIniFile, 'ToolTip', 'weight')})
+
+; Create a theme group and activate the theme
+themeGroup := XttThemeGroup('MyGroup', theme)
+themeGroup.ThemeActivate('MyTheme')
+
+; Create the `XttPool` object. The constructor requires an `XttThemeGroup` object
+pool := XttPool(themeGroup)
+
 ; Load logging type from INI
-intLoggingType := Integer(IniRead(strIniFile, "Settings", "loggingType", 0))
+intLoggingType := Integer(IniRead(strIniFile, 'Settings', 'loggingType', 0))
 
 ; Load circle size from INI — minimum 50 enforced internally
-intCircleSize := Max(50, Integer(IniRead(strIniFile, "Gui", "intCircleSize", 50)))
+intCircleSize := Max(50, Integer(IniRead(strIniFile, 'Gui', 'intCircleSize', 50)))
 
 ; Load default language from INI — EN starts in English, LL starts in local language
-if (IniRead(strIniFile, "Settings", "defaultLanguage", "EN") = "LL")
-    speakLanguage := "special"
+if (IniRead(strIniFile, 'Settings', 'defaultLanguage', 'EN') = 'LL')
+    speakLanguage := 'special'
 
 ; Refresh the log-file each time the script is started
 if FileExist(strLogFile)

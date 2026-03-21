@@ -1,0 +1,106 @@
+Make a plan to remove the SAPI-test functionality completely.
+Remove everything from the Mic test functionality.
+To make it clear: Also HotkeyCmsMic.ahk becomes HotkeyCmd.ahk,
+tab 3 on HotkeyCmd.ahk will disappear and blnMicTestMode disappers.
+Put the plan after these five lines. No coding yet.
+
+Plan: Remove SAPI-Test and Mic Test Functionality
+===================================================
+
+Scope:
+  - Remove intTestMode  (F5 SAPI command test — commands heard but not executed)
+  - Remove from Tab 3: audio level meter, confidence slider, show-confidence checkbox,
+    Test Recognition button, blnMicTestMode — Tab 3 itself stays with mic selection only
+  - Name HotkeyCmdMicGui stays unchanged
+  - NOTE: fltConfidenceThreshold and blnShowConfidence are kept — still used by Core
+
+
+Phase 1 — Voice_Command.ahk
+-----------------------------
+1.  Remove global:  intTestMode := 0
+2.  Remove global:  strColorTestMode := 'FFA500'
+3.  Remove global:  blnMicTestMode := false
+4.  Remove globals: objProgressLevel, objTxtLevelPercent, objTxtTestResult
+5.  Remove globals: objSliderThreshold, objTxtThresholdValue, objChkshowConfidence
+6.  Remove F5 hotkey block (3 lines):
+      ; F5 Hotkey - Toggle Test Mode on/off
+      HotKey(IniRead(..., 'testMode', 'F5'), ToggleTestMode)
+      ; F5:: ToggleTestMode()
+
+
+Phase 2 — Voice_Command.ini
+-----------------------------
+7.  Remove  testMode=F5  from [HotKeys] section
+
+
+Phase 3 — Lib\Project\Voice_Command_UI.ahk
+--------------------------------------------
+ToggleListening():
+8.  Remove  intTestMode  from the global declaration line
+9.  Remove the  if (intTestMode)  block (tooltip + return)
+
+ToggleTestMode():
+10. Remove entire function with its JSDoc comment
+
+GetStatusColor():
+11. Remove  intTestMode  from the global declaration lines
+12. Remove  strColorTestMode  from the global declaration lines
+13. Remove the  if (intTestMode) return strColorTestMode  line with comment
+
+HotkeyCmdMicGui():
+14. Remove global lines for:
+      objProgressLevel, objTxtLevelPercent, objTxtTestResult
+      objSliderThreshold, objTxtThresholdValue, objChkshowConfidence
+      fltConfidenceThreshold, blnShowConfidence
+15. In "already exists" branch: remove  SetTimer(UpdateAudioLevel, defaultTab = 3 ? 100 : 0)
+16. Remove entire  tab.OnEvent('Change', ...)  line
+17. In Tab 3 block: remove these controls (keep mic listview + objTxtMicStatus + Save button):
+      - Audio level progress bar + label  (objProgressLevel, objTxtLevelPercent)
+      - Confidence threshold slider + value label  (objSliderThreshold, objTxtThresholdValue)
+      - Show confidence checkbox  (objChkshowConfidence)
+      - Test Recognition button
+      - objTxtTestResult text control
+18. Remove  SetTimer(UpdateAudioLevel, defaultTab = 3 ? 100 : 0)  line before goo.Show
+
+HotkeyCmdMicGuiClose():
+19. Remove  SetTimer(UpdateAudioLevel, 0)  line
+
+SaveMicSettings():
+20. Remove saving of confidenceThreshold and showConfidence — keep only microphoneName save
+
+Remove functions entirely (with any preceding comments):
+21. ThresholdSliderChange()
+22. TestMicRecognition()
+23. ResetMicTest()
+24. UpdateAudioLevel()
+25. Remove section comment block  ; AUDIO LEVEL MONITORING
+
+
+Phase 4 — Lib\Project\Voice_Command_Core.ahk
+----------------------------------------------
+InitializeVoiceRecognition():
+26. Remove  intTestMode  from the global declaration line
+27. In the SHOW_GUI block: remove  objManagerTab.Value := 2  and  SetTimer(UpdateAudioLevel, 100)
+    (HotkeyCmdMicGui() call stays — it now opens on Tab 1 by default)
+28. In the startup MsgBox: remove the sentence
+      "Press F5 to toggle test mode (orange circle)."
+
+HandleRecognition():
+29. Remove  intTestMode  from the global declaration line
+30. Remove the  if (intTestMode)  MsgBox block — leave only  VoiceHandler(arg)
+
+
+Phase 5 — Lib\Project\Voice_Command_Utils.ahk
+-----------------------------------------------
+31. In CreateDefaultIni(): remove
+      IniWrite("0", strIniFile, "Settings", "testMode")
+
+
+Summary
+--------
+Files changed : 5
+Edits         : 31 targeted changes
+Tab 3 stays   : mic selection listview + objTxtMicStatus + Save button remain
+Kept          : fltConfidenceThreshold, blnShowConfidence (still used by Core recognition)
+Kept          : MicListClick, SaveMicSettings (simplified), objTxtMicStatus
+Not affected  : intCurrentMicIndex, strCurrentMicName, objRecognizer (still used by SAPI init)

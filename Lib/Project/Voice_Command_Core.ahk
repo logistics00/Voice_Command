@@ -323,21 +323,19 @@ class VoiceEventSink {
                         LogMsg(FFL('VC_Core', A_ThisFunc, A_LineNumber) . "REJECTED: Below threshold (" Round(fltConfidenceThreshold * 100) "%)", 2)
                         ; Show rejection in tooltip
                         if (blnShowConfidence) {
-                            ToolTip("❌ Rejected: " strText " (" intConfPct "% < " Round(fltConfidenceThreshold * 100) "%)")
+                            pool.ShowByMouse('❌ Rejected: ' strText ' (' intConfPct '% < \' Round(fltConfidenceThreshold * 100) '%)', 3000)
                         } else {
-                            ToolTip("❌ Rejected: Low confidence")
+                            pool.ShowByMouse('❌ Rejected: Low confidence', 3000)
                         }
-                        SetTimer(() => ToolTip(), -3000)
                         return
                     }
 
                     ; Show accepted recognition
                     if (blnShowConfidence) {
-                        ToolTip("✓ Heard: " strText " (" intConfPct "%)")
+                        pool.ShowByMouse('✓ Heard: ' strText ' (' intConfPct '%)', 3000)
                     } else {
-                        ToolTip("Heard: " strText)
+                        pool.ShowByMouse('Heard: ' strText, 3000)
                     }
-                    SetTimer(() => ToolTip(), -3000)
 
                     if (intTestMode) {
                         MsgBox("Command heard: " strText "`nConfidence: " intConfPct "%`n`nNOT executed (test mode)", "Command Test")
@@ -361,8 +359,7 @@ class VoiceEventSink {
                     strText := objPhraseInfo.GetText()
                     LogMsg(FFL('VC_Core', A_ThisFunc, A_LineNumber) . "Hypothesis: " strText, 2)
                     if (intSapiSpeakMode = 1) {
-                        ToolTip("? Hypothesis: " strText)
-                        SetTimer(() => ToolTip(), -2000)
+                        pool.ShowByMouse('? Hypothesis: ' strText, 3000)
                     }
                     return
                 }
@@ -382,14 +379,12 @@ class VoiceEventSink {
                     if (strText != "") {
                         LogMsg(FFL('VC_Core', A_ThisFunc, A_LineNumber) . "FalseRecog: " strText, 2)
                         if (intSapiSpeakMode = 1) {
-                            ToolTip("~ False: " strText)
-                            SetTimer(() => ToolTip(), -2000)
+                            pool.ShowByMouse('~ False: ' strText, 3000)
                         }
                     } else {
                         LogMsg(FFL('VC_Core', A_ThisFunc, A_LineNumber) . "FalseRecog: (low confidence)", 2)
                         if (intSapiSpeakMode = 1) {
-                            ToolTip("~ False: (low confidence)")
-                            SetTimer(() => ToolTip(), -2000)
+                            pool.ShowByMouse('~ False: (low confidence)', 3000)
                         }
                     }
                     return
@@ -484,15 +479,13 @@ ExecuteAction(strActionData) {
                     objGrammar.CmdSetRuleState("cmd", 0)
                     blnListening := false
                     UpdateTrayIcon()
-                    ToolTip("🔇 Listening PAUSED")
-                    SetTimer(() => ToolTip(), -2000)
+                    pool.ShowByMouse('🔇 Listening PAUSED', 2000)
                     LogMsg(FFL('VC_Core', A_ThisFunc, A_LineNumber) . "Listening paused via voice", 2)
                 case "startlistening":
                     objGrammar.CmdSetRuleState("cmd", 1)
                     blnListening := true
                     UpdateTrayIcon()
-                    ToolTip("🎤 Listening RESUMED")
-                    SetTimer(() => ToolTip(), -2000)
+                    pool.ShowByMouse('🎤 Listening RESUMED', 2000)
                     LogMsg(FFL('VC_Core', A_ThisFunc, A_LineNumber) . "Listening resumed via voice", 2)
             }
 

@@ -80,11 +80,10 @@ BridgeInit() {
     }
 
     ; Retry TCP connection — bridge loads Vosk models before starting the server
-    ToolTip("Connecting to Python bridge, please wait...")
+    pool.ShowByMouse('Connecting to Python bridge, please wait...', 3000)
     Loop 20 {
         Sleep(500)
         if (BridgeConnect()) {
-            ToolTip()
             LogMsg(FFL('VC_Bridge', A_ThisFunc, A_LineNumber) . "Bridge connected (attempt " A_Index ")", 2)
             if (speakLanguage = "special")
                 BridgeSend("LANG:special")
@@ -92,7 +91,6 @@ BridgeInit() {
         }
     }
 
-    ToolTip()
     LogMsg(FFL('VC_Bridge', A_ThisFunc, A_LineNumber) . "Bridge connection failed after 20 attempts", 4)
     MsgBox("Could not connect to Python bridge.`n`nVosk/Whisper unavailable.", "Bridge Error", "Icon!")
 }
@@ -202,8 +200,7 @@ BridgeHandleMessage(strMsg) {
     } else if (SubStr(strMsg, 1, 6) = "ERROR:") {
         strErr := SubStr(strMsg, 7)
         LogMsg(FFL('VC_Bridge', A_ThisFunc, A_LineNumber) . "Bridge error: " strErr, 4)
-        ToolTip("Bridge: " strErr)
-        SetTimer(() => ToolTip(), -10000)
+        pool.ShowByMouse('Bridge: ' strErr, 10000)
     }
 }
 
@@ -244,14 +241,12 @@ CycleVoiceMode(*) {
     global strVoiceMode, blnListening, intTcpSocket
 
     if (!blnListening) {
-        ToolTip("Cannot switch mode -- listening is OFF")
-        SetTimer(() => ToolTip(), -2000)
+        pool.ShowByMouse('Cannot switch mode -- listening is OFF', 2000)
         return
     }
 
     if (intTcpSocket = 0) {
-        ToolTip("Python bridge not connected")
-        SetTimer(() => ToolTip(), -2000)
+        pool.ShowByMouse('Python bridge not connected', 2000)
         return
     }
 
@@ -277,9 +272,8 @@ SwitchToVosk() {
     strVoiceMode := "vosk"
     BridgeSend("MODE:vosk")
     UpdateStatusCircle()
-    ToolTip("Mode: Vosk (sentence recognition)")
     LogMsg(FFL('VC_Bridge', A_ThisFunc, A_LineNumber) . "Switched to Vosk", 2)
-    SetTimer(() => ToolTip(), -2000)
+    pool.ShowByMouse('Mode: Vosk (sentence recognition)', 2000)
 }
 
 /** @description SwitchToWhisper - Pause SAPI grammar and activate Whisper dictation mode */
@@ -296,9 +290,8 @@ SwitchToWhisper() {
     strVoiceMode := "whisper"
     BridgeSend("MODE:whisper")
     UpdateStatusCircle()
-    ToolTip("Mode: Whisper (dictation)")
     LogMsg(FFL('VC_Bridge', A_ThisFunc, A_LineNumber) . "Switched to Whisper", 2)
-    SetTimer(() => ToolTip(), -2000)
+    pool.ShowByMouse('Mode: Whisper (dictation)', 2000)
 }
 
 /** @description SwitchToSapi - Return from Vosk/Whisper to SAPI mode and resume grammar */
@@ -320,9 +313,8 @@ SwitchToSapi() {
     }
 
     UpdateStatusCircle()
-    ToolTip("Mode: SAPI (command recognition)")
     LogMsg(FFL('VC_Bridge', A_ThisFunc, A_LineNumber) . "Switched to SAPI", 2)
-    SetTimer(() => ToolTip(), -2000)
+    pool.ShowByMouse('Mode: SAPI (command recognition)', 2000)
 }
 
 /** @description ToggleLanguage - F4 handler: toggle Vosk language between default and special */
@@ -331,30 +323,27 @@ ToggleLanguage(*) {
     global speakLanguage, strSpecialLanguage, intTcpSocket
 
     if (intTcpSocket = 0) {
-        ToolTip("Python bridge not connected")
-        SetTimer(() => ToolTip(), -2000)
+        pool.ShowByMouse('Python bridge not connected', 3000)
         return
     }
 
-    if (strSpecialLanguage = "") {
-        ToolTip("No local language configured -- add localLanguage=nl to INI")
-        SetTimer(() => ToolTip(), -3000)
+    if (strSpecialLanguage = '') {
+        pool.ShowByMouse('No local language configured -- add localLanguage=nl to INI', 3000)
         return
     }
 
-    if (speakLanguage = "default") {
-        speakLanguage := "special"
-        BridgeSend("LANG:special")
-        ToolTip("Language: " strSpecialLanguage)
+    if (speakLanguage = 'default') {
+        speakLanguage := 'special'
+        BridgeSend('LANG:special')
+        pool.ShowByMouse('Language: ' strSpecialLanguage, 3000)
     } else {
-        speakLanguage := "default"
-        BridgeSend("LANG:default")
-        ToolTip("Language: English (default)")
+        speakLanguage := 'default'
+        BridgeSend('LANG:default')
+        pool.ShowByMouse('Language: English (default)', 3000)
     }
 
     UpdateStatusCircle()
-    LogMsg(FFL('VC_Bridge', A_ThisFunc, A_LineNumber) . "Language toggled: " speakLanguage, 2)
-    SetTimer(() => ToolTip(), -2000)
+    LogMsg(FFL('VC_Bridge', A_ThisFunc, A_LineNumber) . 'Language toggled: ' speakLanguage, 2)
 }
 
 ;================= End of VC_Bridge.ahk =================
