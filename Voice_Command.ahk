@@ -132,6 +132,13 @@ global strCurrentMicName := ''
 ; Confidence Threshold settings
 global fltConfidenceThreshold := 0.40
 global blnShowConfidence := true
+global fltIniThreshold := 0.40   ; Anchor value read from INI (0.0–1.0).
+global intAdaptN      := 0       ; Count of recognition events in the current cycle.
+global fltAdaptSum    := 0.0     ; Running sum of raw EngineConfidence scores.
+global objTxtThreshold := ''     ; Dynamic threshold label in Microphone tab.
+global radWhisperLocal  := ''    ; Radio button — local backend.
+global radWhisperOpenAI := ''    ; Radio button — OpenAI backend.
+global edtApiKey        := ''    ; Edit field for OpenAI API key.
 
 ; SAPI Speak Mode (0=log only, 1=tooltip+log for Hypothesis/FalseRecognition)
 global intSapiSpeakMode := 0

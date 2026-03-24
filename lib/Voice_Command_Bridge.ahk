@@ -279,7 +279,7 @@ SwitchToVosk() {
 /** @description SwitchToWhisper - Pause SAPI grammar and activate Whisper dictation mode */
 SwitchToWhisper() {
     LogMsg(FFL('VC_Bridge', A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global strVoiceMode, objGrammar, objControlGrammar
+    global strVoiceMode, objGrammar, objControlGrammar, strIniFile
 
     ; Pause both SAPI grammars so mic is free for Python
     try {
@@ -291,7 +291,8 @@ SwitchToWhisper() {
     BridgeSend("MODE:whisper")
     UpdateStatusCircle()
     LogMsg(FFL('VC_Bridge', A_ThisFunc, A_LineNumber) . "Switched to Whisper", 2)
-    pool.ShowByMouse('Mode: Whisper (dictation)', 2000)
+    strBackend := IniRead(strIniFile, 'Settings', 'whisperBackend', 'local')
+    pool.ShowByMouse('Mode: Whisper (dictation) — ' (strBackend = 'openai' ? 'OpenAI' : 'Local'), 2000)
 }
 
 /** @description SwitchToSapi - Return from Vosk/Whisper to SAPI mode and resume grammar */

@@ -266,6 +266,8 @@ HotkeyCmdMicGui(defaultTab := 1) {
     global strIniFile
     global objRecognizer, intCurrentMicIndex, strCurrentMicName
     global objTxtMicStatus
+    global fltConfidenceThreshold, blnShowConfidence, objTxtThreshold
+    global radWhisperLocal, radWhisperOpenAI, edtApiKey
 
     ; If GUI already exists, switch to requested tab and show
     if (goo != "") {
@@ -286,7 +288,7 @@ HotkeyCmdMicGui(defaultTab := 1) {
     goo.OnEvent('Close', HotkeyCmdMicGuiClose)
 
     ; Tab control — must be added before all tab content
-    tab := goo.AddTab3('x10 y+m w' guiWidth, ['Hotkeys', 'Commands', 'Microphone'])
+    tab := goo.AddTab3('x10 y+m w' guiWidth - 100, ['Hotkeys', 'Commands', 'Microphone'])
 
     ;----------------------------------------------------------
     ; TAB 1 — Commands (Hotkeys + Add/Edit + ListView)
@@ -368,7 +370,7 @@ HotkeyCmdMicGui(defaultTab := 1) {
     btnClear := goo.AddButton("x+m yp w80 h30", "Clear")
     btnClear.OnEvent("Click", ClearFields)
 
-    strLvOptions := "x30 y+40 w" guiWidth - 30 " r30 BackGround0x03f68f Grid LV0x20"
+    strLvOptions := "x30 y+40 w" guiWidth - 170 " r30 BackGround0x00F0F0 Grid LV0x20"
     lv1 := goo.AddListView(strLvOptions, ["Command", "Type", "Action"])
     lv1.OnEvent("Click", CommandListClick)
     lv1.OnEvent("DoubleClick", CommandListDoubleClick)
@@ -384,7 +386,7 @@ HotkeyCmdMicGui(defaultTab := 1) {
     ;----------------------------------------------------------
     tab.UseTab(3)
 
-    goo.AddText('x30 y+m', 'Select your microphone for voice recognition:')
+    goo.AddText('x30 y+m+20', 'Select your microphone for voice recognition:')
     objTxtMicStatus := goo.AddText('x+m yp', '[Current: ' strCurrentMicName ']')
     lv2 := goo.AddListView('x30 y+m w400 r4 -Multi Background0x00F0F0', ['#', 'Microphone Name'])
     lv2.OnEvent('Click', MicListClick)
@@ -402,7 +404,32 @@ HotkeyCmdMicGui(defaultTab := 1) {
     lv2.ModifyCol(1, 30)
     lv2.ModifyCol(2, 360)
 
-    goo.AddButton('x30 y+m+30 h30', 'Save Microphone Settings').OnEvent('Click', SaveMicSettings)
+    goo.AddButton('x+m yp h30', 'Save Microphone Settings').OnEvent('Click', SaveMicSettings)
+	goo.AddGroupBox('x20 y40 w650 h190', 'Microphone Selection')
+
+    objTxtThreshold := goo.AddText('x30 y+m+20', 'Threshold: ')
+    sliderThreshold := goo.AddSlider('x+m yp w400 Range0-100 TickInterval10 Line1 Page5', Round(fltConfidenceThreshold * 100))
+    sliderThreshold.OnEvent('Change', OnThresholdSliderChange)
+    objTxtThreshold := goo.AddText('x+m yp', Round(fltConfidenceThreshold * 100) '%')
+    goo.AddText('x30 y+m cRed', 'Drag to set the minimum confidence (%) for a recognition to be accepted.')
+    chkShowConfidence := goo.AddCheckbox('x30 y+m', 'Show confidence % in tooltips')
+    chkShowConfidence.Value := blnShowConfidence ? 1 : 0
+    chkShowConfidence.OnEvent('Click', OnShowConfidenceClick)
+    goo.AddGroupBox('x20 y235 w650 h120', 'SAPI Threshold and Confidence')
+
+    strWhisperBackend := IniRead(strIniFile, 'Settings', 'whisperBackend', 'local')
+    strApiKey         := IniRead(strIniFile, 'Settings', 'openaiApiKey',   '')
+    radWhisperLocal  := goo.AddRadio('x30 y+m+30 Group', 'Local  — faster-whisper, offline, free')
+    radWhisperOpenAI := goo.AddRadio('x30 y+m', 'OpenAI — GPT-4o Transcribe, cloud, $0.006/min')
+    radWhisperLocal.Value  := (strWhisperBackend = 'local')  ? 1 : 0
+    radWhisperOpenAI.Value := (strWhisperBackend = 'openai') ? 1 : 0
+    radWhisperLocal.OnEvent('Click',  OnWhisperBackendChange)
+    radWhisperOpenAI.OnEvent('Click', OnWhisperBackendChange)
+    goo.AddText('x30 y+m+10', 'OpenAI API Key (when choice for OpenAI):')
+    edtApiKey := goo.AddEdit('x+m yp w300 Background0x00F0F0', strApiKey)
+    edtApiKey.Enabled := (strWhisperBackend = 'openai')
+    goo.AddButton('x30 y+m w160 h30', 'Save Whisper Settings').OnEvent('Click', SaveWhisperSettings)
+    goo.AddGroupBox('x20 y365 w650 h180', 'Whisper Backend')
 
     tab.UseTab(0)											; close construction context
     tab.Value := defaultTab									; select correct tab
@@ -661,6 +688,53 @@ SaveMicSettings(*) {
         LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . "Failed to save: " err.Message, 4)
         MsgBox("Failed to save settings: " err.Message, "Error", "Icon!")
     }
+}
+
+/** @description OnThresholdSliderChange - Handle threshold slider movement */
+OnThresholdSliderChange(ctrl, *) {
+    global fltConfidenceThreshold, fltIniThreshold, strIniFile
+    global intAdaptN, fltAdaptSum, objTxtThreshold
+
+    intPct := ctrl.Value
+    fltConfidenceThreshold := intPct / 100
+    fltIniThreshold        := intPct / 100
+    intAdaptN   := 0
+    fltAdaptSum := 0.0
+
+    IniWrite(intPct, strIniFile, "Settings", "confidenceThreshold")
+
+    objTxtThreshold.Text := 'Threshold: ' intPct '%'
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Threshold set by slider to ' intPct '%', 2)
+}
+
+/** @description OnShowConfidenceClick - Handle show-confidence checkbox toggle */
+OnShowConfidenceClick(ctrl, *) {
+    global blnShowConfidence, strIniFile
+
+    blnShowConfidence := (ctrl.Value = 1)
+    IniWrite(blnShowConfidence ? "1" : "0", strIniFile, "Settings", "showConfidence")
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'ShowConfidence set to ' (blnShowConfidence ? 'ON' : 'OFF'), 2)
+}
+
+/** @description OnWhisperBackendChange - Enable/disable API key field based on backend selection */
+OnWhisperBackendChange(ctrl, *) {
+    global edtApiKey, radWhisperOpenAI
+
+    edtApiKey.Enabled := (radWhisperOpenAI.Value = 1)
+}
+
+/** @description SaveWhisperSettings - Save Whisper backend and API key to INI */
+SaveWhisperSettings(*) {
+    global strIniFile, radWhisperOpenAI, edtApiKey
+
+    strBackend := radWhisperOpenAI.Value ? 'openai' : 'local'
+    strKey     := Trim(edtApiKey.Value)
+
+    IniWrite(strBackend, strIniFile, 'Settings', 'whisperBackend')
+    IniWrite(strKey,     strIniFile, 'Settings', 'openaiApiKey')
+
+    pool.ShowByMouse('Whisper settings saved. Press F3 twice to apply if Whisper is active.', 3000)
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Whisper backend set to ' strBackend, 2)
 }
 
 ;================= End of VC_UI.ahk =================

@@ -32,6 +32,8 @@ VAD_CHUNK   = 512    # 32ms at 16kHz -- minimum required by silero-vad
 VAD_THRESH  = 0.5    # speech probability threshold
 SILENCE_END = 17     # ~510ms of consecutive silent chunks -> end of utterance
 
+OPENAI_TRANSCRIBE_MODEL = "gpt-4o-transcribe"  # or "whisper-1"
+
 
 # ------------------------------------------------------------------
 # INI reader -- handles UTF-16 LE (AHK default) and UTF-8
@@ -72,6 +74,8 @@ class VoiceBridge:
         self.audio_thread        = None
         self.running             = True
         self._whisper_requested  = False  # True while async load is pending
+        self.whisper_backend     = "local" # "local" | "openai"
+        self.openai_api_key      = ""      # OpenAI API key for cloud transcription
 
     # --------------------------------------------------------------
     # Config & model loading
@@ -79,8 +83,11 @@ class VoiceBridge:
 
     def load_config(self):
         cfg = load_ini(self.ini_path)
-        self.special_lang = cfg.get("Settings", "localLanguage", fallback="").strip().lower()
+        self.special_lang    = cfg.get("Settings", "localLanguage",   fallback="").strip().lower()
+        self.whisper_backend = cfg.get("Settings", "whisperBackend",  fallback="local").strip().lower()
+        self.openai_api_key  = cfg.get("Settings", "openaiApiKey",    fallback="").strip()
         logging.info("localLanguage setting: '%s'", self.special_lang or "(none)")
+        logging.info("Whisper backend: %s", self.whisper_backend)
 
     def load_models(self):
         base = os.path.normpath(
@@ -109,34 +116,44 @@ class VoiceBridge:
             logging.info("No local language (LL) model found at: %s", lang_path)
 
     def load_whisper(self):
-        """Load faster-whisper model and silero-vad. Non-fatal if packages missing."""
+        """Load Whisper backend and silero-vad. Backend is local (faster-whisper) or openai."""
         import torch
-        from faster_whisper import WhisperModel
         cfg = load_ini(self.ini_path)
 
-        # Determine model size: INI override or auto-detect by RAM
-        ini_size = cfg.get("Settings", "whisperModel", fallback="").strip().lower()
-        if ini_size in ("small", "medium"):
-            self.whisper_size = ini_size
-            logging.info("Whisper model size: %s (INI override)", self.whisper_size)
+        # Re-read backend settings so a GUI change takes effect without bridge restart
+        self.whisper_backend = cfg.get("Settings", "whisperBackend", fallback="local").strip().lower()
+        self.openai_api_key  = cfg.get("Settings", "openaiApiKey",   fallback="").strip()
+
+        if self.whisper_backend == "openai":
+            if not self.openai_api_key:
+                self.send("ERROR:OpenAI API key missing. Set openaiApiKey in INI.")
+                return
+            logging.info("Whisper backend: OpenAI (%s)", OPENAI_TRANSCRIBE_MODEL)
         else:
-            import psutil
-            ram_bytes = psutil.virtual_memory().total
-            ram_gb    = ram_bytes / (1024 ** 3)
-            self.whisper_size = "medium" if ram_gb >= 24 else "small"
-            logging.info(
-                "Whisper model size: %s (RAM: %.1fGB detected)",
-                self.whisper_size, ram_gb
+            # local: load faster-whisper model
+            from faster_whisper import WhisperModel
+
+            ini_size = cfg.get("Settings", "whisperModel", fallback="").strip().lower()
+            if ini_size in ("small", "medium"):
+                self.whisper_size = ini_size
+                logging.info("Whisper model size: %s (INI override)", self.whisper_size)
+            else:
+                import psutil
+                ram_bytes = psutil.virtual_memory().total
+                ram_gb    = ram_bytes / (1024 ** 3)
+                self.whisper_size = "medium" if ram_gb >= 24 else "small"
+                logging.info(
+                    "Whisper model size: %s (RAM: %.1fGB detected)",
+                    self.whisper_size, ram_gb
+                )
+
+            logging.info("Loading faster-whisper model '%s' (CPU, int8)...", self.whisper_size)
+            self.whisper_model = WhisperModel(
+                self.whisper_size, device="cpu", compute_type="int8"
             )
+            logging.info("faster-whisper model loaded.")
 
-        # Load faster-whisper
-        logging.info("Loading faster-whisper model '%s' (CPU, int8)...", self.whisper_size)
-        self.whisper_model = WhisperModel(
-            self.whisper_size, device="cpu", compute_type="int8"
-        )
-        logging.info("faster-whisper model loaded.")
-
-        # Load silero-vad
+        # Load silero-vad (needed for both backends to detect end-of-utterance)
         logging.info("Loading silero-vad...")
         self.vad_model, _ = torch.hub.load(
             repo_or_dir="snakers4/silero-vad",
@@ -149,6 +166,38 @@ class VoiceBridge:
         logging.info("silero-vad loaded.")
 
         self.send("STATUS:whisper_ready")
+
+    def _transcribe_openai(self, audio_np, lang_code):
+        """Send audio to OpenAI Transcriptions API and return the transcribed text."""
+        import io
+        import wave
+        try:
+            import openai
+        except ImportError:
+            self.send("ERROR:openai package not installed. Run: pip install openai")
+            return ""
+
+        # Convert float32 16kHz mono numpy array to WAV bytes in memory
+        wav_io = io.BytesIO()
+        with wave.open(wav_io, "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)          # int16 = 2 bytes
+            wf.setframerate(SAMPLE_RATE)
+            pcm = (audio_np * 32767).astype("int16")
+            wf.writeframes(pcm.tobytes())
+        wav_bytes = wav_io.getvalue()
+
+        try:
+            client = openai.OpenAI(api_key=self.openai_api_key)
+            response = client.audio.transcriptions.create(
+                model=OPENAI_TRANSCRIBE_MODEL,
+                file=("audio.wav", wav_bytes, "audio/wav"),
+                language=lang_code,
+            )
+            return response.text.strip()
+        except openai.APIError as exc:
+            logging.error("OpenAI transcription error: %s", exc)
+            return ""
 
     # --------------------------------------------------------------
     # Network helpers
@@ -177,7 +226,14 @@ class VoiceBridge:
             self.send("STATUS:mode_vosk")
 
         elif line == "MODE:whisper":
-            if self.whisper_model is None:
+            # Re-read backend from INI so a settings change takes effect without restart
+            cfg = load_ini(self.ini_path)
+            new_backend = cfg.get("Settings", "whisperBackend", fallback="local").strip().lower()
+            if new_backend != self.whisper_backend:
+                self.whisper_model   = None
+                self.vad_model       = None
+                self.whisper_backend = new_backend
+            if self.vad_model is None:
                 self._whisper_requested = True
                 self.send("STATUS:whisper_loading")
                 threading.Thread(target=self._load_whisper_async, daemon=True).start()
@@ -356,7 +412,9 @@ class VoiceBridge:
                 # ---- WHISPER branch ----
                 elif self.mode == "whisper":
                     import torch  # lazy: only needed for VAD; cached after first import
-                    if self.vad_model is None or self.whisper_model is None:
+                    if self.vad_model is None:
+                        continue
+                    if self.whisper_backend == "local" and self.whisper_model is None:
                         continue
 
                     # Combine leftover from previous block with new data
@@ -396,18 +454,21 @@ class VoiceBridge:
                                 else:
                                     lang_code = "en"
 
-                                try:
-                                    segments, _ = self.whisper_model.transcribe(
-                                        audio_np,
-                                        language=lang_code,
-                                        beam_size=5,
-                                    )
-                                    text = " ".join(
-                                        seg.text.strip() for seg in segments
-                                    ).strip()
-                                except Exception as exc:
-                                    logging.error("Whisper transcribe error: %s", exc)
-                                    text = ""
+                                if self.whisper_backend == "openai":
+                                    text = self._transcribe_openai(audio_np, lang_code)
+                                else:
+                                    try:
+                                        segments, _ = self.whisper_model.transcribe(
+                                            audio_np,
+                                            language=lang_code,
+                                            beam_size=5,
+                                        )
+                                        text = " ".join(
+                                            seg.text.strip() for seg in segments
+                                        ).strip()
+                                    except Exception as exc:
+                                        logging.error("Whisper transcribe error: %s", exc)
+                                        text = ""
 
                                 if text:
                                     logging.info("TEXT (whisper): %s", text)

@@ -292,6 +292,7 @@ class VoiceEventSink {
     HandleRecognition(args) {
         LogMsg(FFL('VC_Core', A_ThisFunc, A_LineNumber) . 'Started', 1)
         global fltConfidenceThreshold, blnShowConfidence
+        global fltIniThreshold, intAdaptN, fltAdaptSum, strIniFile
 
         for intIndex, arg in args {
             try {
@@ -314,6 +315,23 @@ class VoiceEventSink {
                     }
 
                     intConfPct := Round(fltConfidence * 100)
+
+                    ; ── Adaptive threshold update ──────────────────────────────
+                    intAdaptN   += 1
+                    fltAdaptSum += fltConfidence
+                    fltConfidenceThreshold := (10 * fltIniThreshold + fltAdaptSum) / (intAdaptN + 10)
+
+                    if (Mod(intAdaptN, 10) = 0) {
+                        intNewPct := Round(fltConfidenceThreshold * 100)
+                        if (intNewPct != Round(fltIniThreshold * 100)) {
+                            IniWrite(intNewPct, strIniFile, "Settings", "confidenceThreshold")
+                            fltIniThreshold := fltConfidenceThreshold   ; new anchor
+                        }
+                        intAdaptN   := 0
+                        fltAdaptSum := 0.0
+                    }
+                    ; ── End adaptive update ─────────────────────────────────────
+
                     LogMsg(FFL('VC_Core', A_ThisFunc, A_LineNumber) . "RECOGNIZED: " strText " (Confidence: " intConfPct "%)", 2)
 
                     ; Check against confidence threshold

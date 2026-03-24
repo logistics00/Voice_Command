@@ -33,8 +33,10 @@ CreateDefaultIni() {
         IniWrite("7", strIniFile, "Settings", "loggingType")
         IniWrite("40", strIniFile, "Settings", "confidenceThreshold")
         IniWrite("1", strIniFile, "Settings", "showConfidence")
-        IniWrite("nl", strIniFile, "Settings", "localLanguage")
-        IniWrite("EN", strIniFile, "Settings", "defaultLanguage")
+        IniWrite("nl",    strIniFile, "Settings", "localLanguage")
+        IniWrite("EN",    strIniFile, "Settings", "defaultLanguage")
+        IniWrite("local", strIniFile, "Settings", "whisperBackend")
+        IniWrite("",      strIniFile, "Settings", "openaiApiKey")
 
         ; Sample commands
         IniWrite("General|MsgBox|Hello World!", strIniFile, "Commands", "hello")
@@ -87,11 +89,12 @@ LoadCommandsFromIni() {
 /** @description LoadConfidenceSettings - Load Confidence Settings from INI */
 LoadConfidenceSettings() {
     LogMsg(FFL('VC_Utils', A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global strIniFile, fltConfidenceThreshold, blnShowConfidence
+    global strIniFile, fltConfidenceThreshold, blnShowConfidence, fltIniThreshold
 
     try {
         intThreshold := Integer(IniRead(strIniFile, "Settings", "confidenceThreshold", "40"))
         fltConfidenceThreshold := intThreshold / 100
+        fltIniThreshold := fltConfidenceThreshold   ; save as anchor for adaptive logic
 
         strShowConf := IniRead(strIniFile, "Settings", "showConfidence", "1")
         blnShowConfidence := (strShowConf = "1")
@@ -100,6 +103,7 @@ LoadConfidenceSettings() {
     } catch as err {
         LogMsg(FFL('VC_Utils', A_ThisFunc, A_LineNumber) . "Failed to load confidence settings: " err.Message, 4)
         fltConfidenceThreshold := 0.40
+        fltIniThreshold := 0.40
         blnShowConfidence := true
     }
 }
