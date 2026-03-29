@@ -72,7 +72,6 @@ Persistent
 global objRecognizer := ''
 global objContext := ''
 global objGrammar := ''
-global objControlGrammar := ''  ; Separate grammar for start/stop
 global objEventSink := ''
 
 ; Paths
@@ -82,7 +81,6 @@ global strIniFile := A_ScriptDir '\Voice_Command.ini'
 ; Command Maps
 global mapCommands := Map()
 global mapBuiltInCommands := Map()
-global mapControlCommands := Map()
 
 ; State Flags
 global blnLogEnabled := true

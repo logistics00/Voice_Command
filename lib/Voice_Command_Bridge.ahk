@@ -273,12 +273,11 @@ CycleVoiceMode(*) {
 /** @description SwitchToVosk - Pause SAPI grammar and activate Vosk mode */
 SwitchToVosk() {
     LogMsg(FFL('VC_Bridge', A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global strVoiceMode, objGrammar, objControlGrammar
+    global strVoiceMode, objGrammar
 
-    ; Pause both SAPI grammars so mic is free for Python
+    ; Pause SAPI grammar so mic is free for Python
     try {
         objGrammar.CmdSetRuleState("cmd", 0)
-        objControlGrammar.CmdSetRuleState("control", 0)
     }
 
     strVoiceMode := "vosk"
@@ -291,12 +290,11 @@ SwitchToVosk() {
 /** @description SwitchToDictate - Pause SAPI grammar and activate dictate mode */
 SwitchToDictate() {
     LogMsg(FFL('VC_Bridge', A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global strVoiceMode, objGrammar, objControlGrammar, strIniFile
+    global strVoiceMode, objGrammar, strIniFile
 
-    ; Pause both SAPI grammars so mic is free for Python
+    ; Pause SAPI grammar so mic is free for Python
     try {
         objGrammar.CmdSetRuleState("cmd", 0)
-        objControlGrammar.CmdSetRuleState("control", 0)
     }
 
     strVoiceMode := "dictate"
@@ -318,16 +316,13 @@ SwitchToDictate() {
 /** @description SwitchToSapi - Return from Vosk/Whisper to SAPI mode and resume grammar */
 SwitchToSapi() {
     LogMsg(FFL('VC_Bridge', A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global strVoiceMode, objGrammar, objControlGrammar, blnListening
+    global strVoiceMode, objGrammar, blnListening
 
     BridgeSend("MODE:sapi")
     strVoiceMode := "sapi"
 
-    ; Restore both grammars when listening
+    ; Restore main grammar when listening
     if (blnListening) {
-        try {
-            objControlGrammar.CmdSetRuleState("control", 1)
-        }
         try {
             objGrammar.CmdSetRuleState("cmd", 1)
         }

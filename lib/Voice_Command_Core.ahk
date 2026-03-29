@@ -12,8 +12,8 @@
              - Creates control grammar for start/stop (always active) */
 InitializeVoiceRecognition() {
     LogMsg(FFL('VC_Core', A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global objRecognizer, objContext, objGrammar, objControlGrammar, objEventSink
-    global mapCommands, mapBuiltInCommands, mapControlCommands, blnLogEnabled, blnListening
+    global objRecognizer, objContext, objGrammar, objEventSink
+    global mapCommands, mapBuiltInCommands, blnLogEnabled, blnListening
     global intCurrentMicIndex, strCurrentMicName
     global fltConfidenceThreshold, blnShowConfidence
     global strLangId, strIniFile, objManagerTab
@@ -84,22 +84,13 @@ InitializeVoiceRecognition() {
         objEventSink := VoiceEventSink()
         ComObjConnect(objContext, objEventSink)
 
-        ; Create TWO grammars
+        ; Create main grammar
         objGrammar := objContext.CreateGrammar(1)        ; Main grammar (ID=1)
-        objControlGrammar := objContext.CreateGrammar(2) ; Control grammar (ID=2)
 
         ; Build and load MAIN grammar (user commands + built-in)
         strMainGrammarFile := A_Temp "\voice_grammar_main.xml"
         BuildGrammarFile(mapCommands, mapBuiltInCommands, strMainGrammarFile)
         objGrammar.CmdLoadFromFile(strMainGrammarFile, 0)
-
-        ; Build and load CONTROL grammar (only when there are control commands)
-        if (mapControlCommands.Count > 0) {
-            strControlGrammarFile := A_Temp "\voice_grammar_control.xml"
-            BuildControlGrammarFile(strControlGrammarFile)
-            objControlGrammar.CmdLoadFromFile(strControlGrammarFile, 0)
-            objControlGrammar.CmdSetRuleState("control", 1)
-        }
 
         ; Enable main grammar
         objGrammar.CmdSetRuleState("cmd", 1)
@@ -201,37 +192,6 @@ BuildGrammarFile(mapUserCmds, mapBuiltIn, strFilePath) {
     objFile.Close()
 
     LogMsg(FFL('VC_Core', A_ThisFunc, A_LineNumber) . "Grammar built with " (mapBuiltIn.Count + mapUserCmds.Count) " commands", 2)
-}
-
-/** @description BuildControlGrammarFile - Create grammar XML for control commands only (start/stop)
-    @param {string} strFilePath - Path to write the XML grammar file
-    @details - This grammar is ALWAYS active */
-BuildControlGrammarFile(strFilePath) {
-    LogMsg(FFL('VC_Core', A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global strLangId, mapControlCommands
-
-    if FileExist(strFilePath) {
-        FileDelete(strFilePath)
-    }
-
-    strXml := '<?xml version="1.0" encoding="ISO-8859-1"?>'
-    strXml .= '<GRAMMAR LANGID="' . strLangId . '">'
-    strXml .= '<RULE NAME="control" ID="2" TOPLEVEL="ACTIVE">'
-    strXml .= '<L>'
-
-    for strPhrase, strAction in mapControlCommands {
-        strXml .= "<P>" strPhrase "</P>"
-    }
-
-    strXml .= "</L>"
-    strXml .= "</RULE>"
-    strXml .= "</GRAMMAR>"
-
-    objFile := FileOpen(strFilePath, "w", "CP0")
-    objFile.Write(strXml)
-    objFile.Close()
-
-    LogMsg(FFL('VC_Core', A_ThisFunc, A_LineNumber) . "Control grammar built with " mapControlCommands.Count " commands", 2)
 }
 
 /** @description RebuildGrammar - Rebuild Grammar After Command Changes */
@@ -487,18 +447,6 @@ ExecuteAction(strActionData) {
             switch strTarget {
                 case "listcommands":
                     ShowCommandList()
-                case "stoplistening":
-                    objGrammar.CmdSetRuleState("cmd", 0)
-                    blnListening := false
-                    UpdateTrayIcon()
-                    pool.ShowByMouse('🔇 Listening PAUSED', 2000)
-                    LogMsg(FFL('VC_Core', A_ThisFunc, A_LineNumber) . "Listening paused via voice", 2)
-                case "startlistening":
-                    objGrammar.CmdSetRuleState("cmd", 1)
-                    blnListening := true
-                    UpdateTrayIcon()
-                    pool.ShowByMouse('🎤 Listening RESUMED', 2000)
-                    LogMsg(FFL('VC_Core', A_ThisFunc, A_LineNumber) . "Listening resumed via voice", 2)
             }
 
         case "function":

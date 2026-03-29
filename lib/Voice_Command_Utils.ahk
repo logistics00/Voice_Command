@@ -8,14 +8,12 @@
              - Built-in commands in main grammar */
 SetupBuiltInCommands() {
     LogMsg(FFL('VC_Utils', A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global mapBuiltInCommands, mapControlCommands
+    global mapBuiltInCommands
 
     ; These commands are always available in main grammar
     mapBuiltInCommands["list commands"] := "builtin|listcommands"
     mapBuiltInCommands["show commands"] := "builtin|listcommands"
     mapBuiltInCommands["help"] := "builtin|listcommands"
-    mapBuiltInCommands["stop listening"] := "builtin|stoplistening"
-    mapBuiltInCommands["start listening"] := "builtin|startlistening"
 }
 
 /** @description CreateDefaultIni - Create default Voice_Command.ini file with sample commands

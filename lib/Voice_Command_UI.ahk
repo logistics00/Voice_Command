@@ -114,22 +114,18 @@ UpdateTrayIcon() {
 /** @description ToggleListening - Toggle voice command listening state on/off */
 ToggleListening() {
     LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global objGrammar, objControlGrammar, blnListening, mapControlCommands
+    global objGrammar, blnListening
 
     blnListening := !blnListening
 
     if (blnListening) {
-        ; Enable grammars
+        ; Enable grammar
         objGrammar.CmdSetRuleState("cmd", 1)
-        if (mapControlCommands.Count > 0)
-            objControlGrammar.CmdSetRuleState("control", 1)
         pool.ShowByMouse('🎤 Listening ON', 2000)
         LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . "Listening toggled ON via F1", 2)
     } else {
-        ; Disable grammars
+        ; Disable grammar
         objGrammar.CmdSetRuleState("cmd", 0)
-        if (mapControlCommands.Count > 0)
-            objControlGrammar.CmdSetRuleState("control", 0)
         pool.ShowByMouse('🔇 Listening OFF', 2000)
         LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . "Listening toggled OFF via F1", 2)
     }
