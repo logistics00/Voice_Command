@@ -68,16 +68,16 @@ ToggleLoggingMenu(*) {
 
 ToggleLogging() {
     LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global blnLogEnabled, strIniFile
+    global intLoggingType, strIniFile
 
-    blnLogEnabled := !blnLogEnabled
+    if (intLoggingType = 0)
+        intLoggingType := 7   ; restore full logging (flow + debug + error)
+    else
+        intLoggingType := 0   ; disable logging
 
-    try {
-        IniWrite(blnLogEnabled ? "1" : "0", strIniFile, "Settings", "logEnabled")
-    }
-
-    MsgBox("Logging is now " (blnLogEnabled ? "ON" : "OFF"), "Logging Toggle", "Iconi")
-    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . "Logging toggled: " (blnLogEnabled ? "ON" : "OFF"), 2)
+    IniWrite(intLoggingType, strIniFile, 'Settings', 'loggingType')
+    MsgBox("Logging is now " (intLoggingType > 0 ? "ON" : "OFF"), "Logging Toggle", "Iconi")
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . "Logging toggled: " intLoggingType, 2)
 }
 
 ExitMenu(*) {
