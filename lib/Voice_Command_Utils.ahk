@@ -3,9 +3,8 @@
 ; Bevat: Logging, INI handling, Setup, Cleanup
 ;================================================
 
-/** @description SetupBuiltInCommands - Setup built-in and control commands
-    @details - Control commands (start/stop) go in separate grammar
-             - Built-in commands in main grammar */
+/** @description SetupBuiltInCommands - Setup built-in commands
+    @details - Populates mapBuiltInCommands with commands always available in the main grammar */
 SetupBuiltInCommands() {
     LogMsg(FFL('VC_Utils', A_ThisFunc, A_LineNumber) . 'Started', 1)
     global mapBuiltInCommands
@@ -118,6 +117,8 @@ LogMsg(strMessage, display := 0) {
     global strLogFile, intLoggingType
 
     if (intLoggingType & display) = display {
+        if (strLogFile = '')
+            return
         strTimestamp := FormatTime(A_Now, "yyyy-MM-dd HH:mm:ss")
 		strDisplay := Format('{:-5}',(display = 1) ? "Flow" : (display = 2) ? "Debug" : (display = 4) ? "Error" : "Log")
         try
