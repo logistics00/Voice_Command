@@ -159,6 +159,8 @@ global intLoggingType := 0
 #Include <Voice_Command_Bridge>	; TCP				- connection to Python voice bridge
 #Include <Voice_Command_Core>	; Core SAPI engine	- uses Utils and UI functions
 
+OnExit(CleanupVoice)
+
 ;============================================================
 ; INITIALIZATION
 ;============================================================
@@ -191,9 +193,13 @@ intCircleSize := Max(50, Integer(IniRead(strIniFile, 'Gui', 'intCircleSize', 50)
 if (IniRead(strIniFile, 'Settings', 'defaultLanguage', 'EN') = 'LL')
     speakLanguage := 'special'
 
-; Refresh the Project log-file each time the script is started
-if FileExist(strLogFile)
-	FileDelete(strLogFile)
+; Rotate the log file: keep previous run as .prev.log
+strPrevLogFile := A_ScriptDir '\Voice_Command.prev.log'
+if FileExist(strLogFile) {
+    if FileExist(strPrevLogFile)
+        FileDelete(strPrevLogFile)
+    FileMove(strLogFile, strPrevLogFile)
+}
 
 ; Setup Built-in Commands (always available)
 SetupBuiltInCommands()
@@ -212,23 +218,31 @@ BridgeInit()
 ;============================================================
 
 ; F1 Hotkey - Toggle Listening On/Off
-HotKey(IniRead(strIniFile, 'HotKeys', 'listening', 'F1'), ToggleListeningMenu)
-; Hotkey('^!s', ToggleListening())
-; F1:: ToggleListening()
+try {
+    HotKey(IniRead(strIniFile, 'HotKeys', 'listening', 'F1'), ToggleListeningMenu)
+} catch as err {
+    LogMsg(FFL('VC_Main', 'HotKey-listening', A_LineNumber) . 'HotKey error: ' err.Message, 4)
+}
 
 ; F2 Hotkey - Show Command Manager GUI
-HotKey(IniRead(strIniFile, 'HotKeys', 'mainGui', 'F2'), HotkeyMenu)
-; Hotkey('^!s', ShowCommandManagerGui())
-; F2:: ShowCommandManagerGui()
+try {
+    HotKey(IniRead(strIniFile, 'HotKeys', 'mainGui', 'F2'), HotkeyMenu)
+} catch as err {
+    LogMsg(FFL('VC_Main', 'HotKey-mainGui', A_LineNumber) . 'HotKey error: ' err.Message, 4)
+}
 
 ; F3 Hotkey - Cycle voice mode: SAPI -> Vosk -> Dictate -> SAPI
-HotKey(IniRead(strIniFile, 'HotKeys', 'modus', 'F3'), CycleVoiceMode)
-; Hotkey('^!s', CycleVoiceMode())
-; F3:: CycleVoiceMode()
+try {
+    HotKey(IniRead(strIniFile, 'HotKeys', 'modus', 'F3'), CycleVoiceMode)
+} catch as err {
+    LogMsg(FFL('VC_Main', 'HotKey-modus', A_LineNumber) . 'HotKey error: ' err.Message, 4)
+}
 
 ; F4 Hotkey - Toggle Vosk language (default/special)
-HotKey(IniRead(strIniFile, 'HotKeys', 'language', 'F4'), ToggleLanguage)
-; Hotkey('^!s', ToggleListening())
-; F4:: ToggleLanguage()
+try {
+    HotKey(IniRead(strIniFile, 'HotKeys', 'language', 'F4'), ToggleLanguage)
+} catch as err {
+    LogMsg(FFL('VC_Main', 'HotKey-language', A_LineNumber) . 'HotKey error: ' err.Message, 4)
+}
 
 ;================= End of VOICECOMMAND Entry Point =================
