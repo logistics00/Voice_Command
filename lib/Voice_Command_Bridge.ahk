@@ -16,6 +16,7 @@
     @details Uses a raw Winsock connect; if successful sends QUIT and waits 800ms for shutdown. */
 BridgeKillOrphan() {
     LogMsg(FFL('VC_Bridge', A_ThisFunc, A_LineNumber) . 'Started', 1)
+    global intTcpPort
     wsaData := Buffer(400, 0)
     if (DllCall("ws2_32\WSAStartup", "UShort", 0x0202, "Ptr", wsaData, "Int") != 0)
         return
@@ -28,7 +29,7 @@ BridgeKillOrphan() {
 
     sockAddr := Buffer(16, 0)
     NumPut("UShort", 2,                                                            sockAddr, 0)
-    NumPut("UShort", DllCall("ws2_32\htons",    "UShort", 7891,        "UShort"), sockAddr, 2)
+    NumPut("UShort", DllCall("ws2_32\htons",    "UShort", intTcpPort,   "UShort"), sockAddr, 2)
     NumPut("UInt",   DllCall("ws2_32\inet_addr", "AStr",  "127.0.0.1", "UInt"),   sockAddr, 4)
 
     if (DllCall("ws2_32\connect", "Ptr", hSock, "Ptr", sockAddr, "Int", 16, "Int") = 0) {
@@ -38,7 +39,7 @@ BridgeKillOrphan() {
         buf := Buffer(intBufSize, 0)
         StrPut(strQuit, buf, "UTF-8")
         DllCall("ws2_32\send", "Ptr", hSock, "Ptr", buf.Ptr, "Int", intBufSize - 1, "Int", 0)
-        LogMsg(FFL('VC_Bridge', A_ThisFunc, A_LineNumber) . "Sent QUIT to orphan bridge on port 7891", 2)
+        LogMsg(FFL('VC_Bridge', A_ThisFunc, A_LineNumber) . "Sent QUIT to orphan bridge on port " intTcpPort, 2)
         Sleep(800)
     }
 
@@ -170,8 +171,15 @@ BridgeReceiveLoop() {
 
     buf := Buffer(4096, 0)
     bytesRecv := DllCall("ws2_32\recv", "Ptr", intTcpSocket, "Ptr", buf.Ptr, "Int", 4096, "Int", 0, "Int")
-    if (bytesRecv <= 0)
+    if (bytesRecv <= 0) {
+        LogMsg(FFL('VC_Bridge', A_ThisFunc, A_LineNumber) . "Bridge connection lost (recv=" bytesRecv ")", 4)
+        SetTimer(BridgeReceiveLoop, 0)
+        DllCall("ws2_32\closesocket", "Ptr", intTcpSocket)
+        DllCall("ws2_32\WSACleanup")
+        intTcpSocket := 0
+        pool.ShowByMouse('Bridge disconnected — restart script to reconnect.', 6000)
         return
+    }
 
     strTcpBuffer .= StrGet(buf.Ptr, bytesRecv, "UTF-8")
 
@@ -225,7 +233,8 @@ BridgeDisconnect() {
 
     if (intTcpSocket != 0) {
         BridgeSend("QUIT")
-        ProcessWaitClose(intBridgePid, 2000)
+        if (intBridgePid != 0)
+            ProcessWaitClose(intBridgePid, 2000)
         if ProcessExist(intBridgePid)
           ProcessClose(intBridgePid)
         DllCall("ws2_32\closesocket", "Ptr", intTcpSocket)
