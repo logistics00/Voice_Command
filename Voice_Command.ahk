@@ -88,7 +88,7 @@ global mapControlCommands := Map()
 global blnLogEnabled := true
 global blnListening := true
 
-; Voice mode: sapi | vosk | whisper
+; Voice mode: sapi | vosk | dictate
 global strVoiceMode := 'sapi'
 global speakLanguage := 'default'   ; default = English, special = localLanguage= from INI
 global strSpecialLanguage := ''     ; e.g. 'nl' — read from INI at bridge startup
@@ -136,8 +136,10 @@ global fltIniThreshold := 0.40   ; Anchor value read from INI (0.0–1.0).
 global intAdaptN      := 0       ; Count of recognition events in the current cycle.
 global fltAdaptSum    := 0.0     ; Running sum of raw EngineConfidence scores.
 global objTxtThreshold := ''     ; Dynamic threshold label in Microphone tab.
-global radWhisperLocal  := ''    ; Radio button — local backend.
-global radWhisperOpenAI := ''    ; Radio button — OpenAI backend.
+global radDictateFW     := ''    ; Radio button — faster-whisper backend.
+global radDictateOpenAI := ''    ; Radio button — OpenAI GPT-4o backend.
+global radDictateP2     := ''    ; Radio button — Parakeet v2 backend.
+global radDictateP3     := ''    ; Radio button — Parakeet v3 backend.
 global edtApiKey        := ''    ; Edit field for OpenAI API key.
 
 ; SAPI Speak Mode (0=log only, 1=tooltip+log for Hypothesis/FalseRecognition)
@@ -191,7 +193,7 @@ intCircleSize := Max(50, Integer(IniRead(strIniFile, 'Gui', 'intCircleSize', 50)
 if (IniRead(strIniFile, 'Settings', 'defaultLanguage', 'EN') = 'LL')
     speakLanguage := 'special'
 
-; Refresh the log-file each time the script is started
+; Refresh the Project log-file each time the script is started
 if FileExist(strLogFile)
 	FileDelete(strLogFile)
 
@@ -221,7 +223,7 @@ HotKey(IniRead(strIniFile, 'HotKeys', 'mainGui', 'F2'), HotkeyMenu)
 ; Hotkey('^!s', ShowCommandManagerGui())
 ; F2:: ShowCommandManagerGui()
 
-; F3 Hotkey - Cycle voice mode: SAPI -> Vosk -> Whisper -> SAPI
+; F3 Hotkey - Cycle voice mode: SAPI -> Vosk -> Dictate -> SAPI
 HotKey(IniRead(strIniFile, 'HotKeys', 'modus', 'F3'), CycleVoiceMode)
 ; Hotkey('^!s', CycleVoiceMode())
 ; F3:: CycleVoiceMode()

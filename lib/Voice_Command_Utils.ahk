@@ -3,9 +3,6 @@
 ; Bevat: Logging, INI handling, Setup, Cleanup
 ;================================================
 
-; Logging Type (bitwise: 1=flow, 2=test, 4=error, 7=all)
-global intLoggingType := IniRead(strIniFile, 'Settings', 'loggingType', 0)
-
 /** @description SetupBuiltInCommands - Setup built-in and control commands
     @details - Control commands (start/stop) go in separate grammar
              - Built-in commands in main grammar */
@@ -35,13 +32,13 @@ CreateDefaultIni() {
         IniWrite("1", strIniFile, "Settings", "showConfidence")
         IniWrite("nl",    strIniFile, "Settings", "localLanguage")
         IniWrite("EN",    strIniFile, "Settings", "defaultLanguage")
-        IniWrite("local", strIniFile, "Settings", "whisperBackend")
+        IniWrite("faster-whisper", strIniFile, "Settings", "dictateMode")
         IniWrite("",      strIniFile, "Settings", "openaiApiKey")
 
         ; Sample commands
-        IniWrite("General|MsgBox|Hello World!", strIniFile, "Commands", "hello")
-        IniWrite("General|Run|notepad.exe", strIniFile, "Commands", "notepad")
-        IniWrite("General|Run|calc.exe", strIniFile, "Commands", "calculator")
+        IniWrite("MsgBox|Hello World!", strIniFile, "Commands", "hello")
+        IniWrite("Run|notepad.exe", strIniFile, "Commands", "notepad")
+        IniWrite("Run|calc.exe", strIniFile, "Commands", "calculator")
 
         LogMsg(FFL('VC_Utils', A_ThisFunc, A_LineNumber) . "Created default INI file", 2)
     } catch as err {
@@ -158,7 +155,7 @@ CleanupVoice(exitReason, exitCode) {
 
 ; Example function for voice-commands for calling internal functions
 ExampleFunction() {
-    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
+    LogMsg(FFL('VC_Utils', A_ThisFunc, A_LineNumber) . 'Started', 1)
     MsgBox("This is an example of a function-call via voicecommand!", "Example")
 }
 

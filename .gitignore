@@ -4,12 +4,14 @@
 .env*.local
 .env
 
-/Docs
+/Divers
 /Connie
+/Models
 
 # Sofane
 *.docx
 *.tmp
 *.log
+*.txt
 /public/files
 /public/images

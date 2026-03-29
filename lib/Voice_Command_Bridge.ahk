@@ -3,7 +3,7 @@
 ; Handles: bridge startup, TCP connection, mode cycling (SAPI/Vosk/Whisper), language toggle
 ;
 ; Protocol (AHK -> Python):
-;   MODE:vosk | MODE:whisper | MODE:sapi | LANG:default | LANG:special | QUIT
+;   MODE:vosk | MODE:dictate | MODE:sapi | LANG:default | LANG:special | QUIT
 ; Protocol (Python -> AHK):
 ;   TEXT:<text> | STATUS:<msg> | ERROR:<msg>
 ;=================================================
@@ -196,11 +196,23 @@ BridgeHandleMessage(strMsg) {
             LogMsg(FFL('VC_Bridge', A_ThisFunc, A_LineNumber) . "Typed: " strText, 2)
         }
     } else if (SubStr(strMsg, 1, 7) = "STATUS:") {
-        LogMsg(FFL('VC_Bridge', A_ThisFunc, A_LineNumber) . "Bridge status: " SubStr(strMsg, 8), 2)
+        strStatus := SubStr(strMsg, 8)
+        LogMsg(FFL('VC_Bridge', A_ThisFunc, A_LineNumber) . "Bridge status: " strStatus, 2)
+        if (strStatus = "parakeet_download_prompt")
+            pool.ShowByMouse("Parakeet model missing — download dialog opening...", 4000)
+        else if (strStatus = "parakeet_downloading")
+            pool.ShowByMouse("Downloading Parakeet model — please wait...", 120000)
     } else if (SubStr(strMsg, 1, 6) = "ERROR:") {
         strErr := SubStr(strMsg, 7)
         LogMsg(FFL('VC_Bridge', A_ThisFunc, A_LineNumber) . "Bridge error: " strErr, 4)
-        pool.ShowByMouse('Bridge: ' strErr, 10000)
+        if (SubStr(strErr, 1, 28) = "Dictate backend load failed:") {
+            pool.ShowByMouse(Trim(SubStr(strErr, 30)), 10000)
+            strVoiceMode := "vosk"
+            UpdateStatusCircle()
+            LogMsg(FFL('VC_Bridge', A_ThisFunc, A_LineNumber) . "Dictate load failed -- reverted to Vosk", 3)
+        } else {
+            pool.ShowByMouse('Bridge: ' strErr, 10000)
+        }
     }
 }
 
@@ -251,11 +263,11 @@ CycleVoiceMode(*) {
     }
 
     if (strVoiceMode = "sapi")
-	    SwitchToVosk()
+        SwitchToVosk()
     else if (strVoiceMode = "vosk")
-		SwitchToWhisper()
-    else if (strVoiceMode = "whisper")
-		SwitchToSapi()
+        SwitchToDictate()
+    else if (strVoiceMode = "dictate")
+        SwitchToSapi()
 }
 
 /** @description SwitchToVosk - Pause SAPI grammar and activate Vosk mode */
@@ -276,8 +288,8 @@ SwitchToVosk() {
     pool.ShowByMouse('Mode: Vosk (sentence recognition)', 2000)
 }
 
-/** @description SwitchToWhisper - Pause SAPI grammar and activate Whisper dictation mode */
-SwitchToWhisper() {
+/** @description SwitchToDictate - Pause SAPI grammar and activate dictate mode */
+SwitchToDictate() {
     LogMsg(FFL('VC_Bridge', A_ThisFunc, A_LineNumber) . 'Started', 1)
     global strVoiceMode, objGrammar, objControlGrammar, strIniFile
 
@@ -287,12 +299,20 @@ SwitchToWhisper() {
         objControlGrammar.CmdSetRuleState("control", 0)
     }
 
-    strVoiceMode := "whisper"
-    BridgeSend("MODE:whisper")
+    strVoiceMode := "dictate"
+    BridgeSend("MODE:dictate")
     UpdateStatusCircle()
-    LogMsg(FFL('VC_Bridge', A_ThisFunc, A_LineNumber) . "Switched to Whisper", 2)
-    strBackend := IniRead(strIniFile, 'Settings', 'whisperBackend', 'local')
-    pool.ShowByMouse('Mode: Whisper (dictation) — ' (strBackend = 'openai' ? 'OpenAI' : 'Local'), 2000)
+    LogMsg(FFL('VC_Bridge', A_ThisFunc, A_LineNumber) . "Switched to Dictate", 2)
+
+    strMode := IniRead(strIniFile, 'Settings', 'dictateMode', 'faster-whisper')
+    switch strMode {
+        case 'faster-whisper': strLabel := 'faster-whisper (local)'
+        case 'whisper-gpt-4o': strLabel := 'OpenAI GPT-4o'
+        case 'parakeet-v2':    strLabel := 'Parakeet v2 (local)'
+        case 'parakeet-v3':    strLabel := 'Parakeet v3 (local)'
+        default:               strLabel := strMode
+    }
+    pool.ShowByMouse('Mode: Dictate — ' strLabel, 2000)
 }
 
 /** @description SwitchToSapi - Return from Vosk/Whisper to SAPI mode and resume grammar */

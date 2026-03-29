@@ -7,3 +7,4 @@ faster-whisper
 sounddevice
 psutil
 openai>=1.0.0
+sherpa-onnx

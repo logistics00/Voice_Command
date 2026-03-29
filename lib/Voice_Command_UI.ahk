@@ -147,7 +147,7 @@ GetStatusLabel() {
     LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
     global strVoiceMode, speakLanguage, strSpecialLanguage
 
-    if (strVoiceMode = "vosk" || strVoiceMode = "whisper") {
+    if (strVoiceMode = "vosk" || strVoiceMode = "dictate") {
         if (speakLanguage = "special" && strSpecialLanguage != "")
             return StrUpper(strSpecialLanguage)
         return "EN"
@@ -157,7 +157,7 @@ GetStatusLabel() {
 
 /** @description GetStatusColor - Return circle color for the current voice mode
     @returns {string} - Hex color code without '#'
-    @details - strVoiceMode drives color: sapi=blue, vosk=green, whisper=purple
+    @details - strVoiceMode drives color: sapi=blue, vosk=green, dictate=purple
              - blnListening=false overrides to red regardless of mode */
 GetStatusColor() {
     LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
@@ -169,7 +169,7 @@ GetStatusColor() {
 
     switch strVoiceMode {
         case "vosk":    return strColorVosk             ; Green
-        case "whisper": return strColorWhisper          ; Purple
+        case "dictate": return strColorWhisper          ; Purple
         default:        return strColorListening        ; Blue — SAPI active
     }
 }
@@ -267,7 +267,7 @@ HotkeyCmdMicGui(defaultTab := 1) {
     global objRecognizer, intCurrentMicIndex, strCurrentMicName
     global objTxtMicStatus
     global fltConfidenceThreshold, blnShowConfidence, objTxtThreshold
-    global radWhisperLocal, radWhisperOpenAI, edtApiKey
+    global radDictateFW, radDictateOpenAI, radDictateP2, radDictateP3, edtApiKey
 
     ; If GUI already exists, switch to requested tab and show
     if (goo != "") {
@@ -291,7 +291,7 @@ HotkeyCmdMicGui(defaultTab := 1) {
     tab := goo.AddTab3('x10 y+m w' guiWidth - 100, ['Hotkeys', 'Commands', 'Microphone'])
 
     ;----------------------------------------------------------
-    ; TAB 1 — Commands (Hotkeys + Add/Edit + ListView)
+    ; TAB 1 — Hotkeys
     ;----------------------------------------------------------
 
 	tab.UseTab(1)
@@ -352,6 +352,9 @@ HotkeyCmdMicGui(defaultTab := 1) {
     cbLanguageShift.OnEvent('Click', (*) => UpdateHotkey(cbLanguageShift, edtLanguage, '+', 'language'))
     cbLanguageAlt.OnEvent('Click', (*) => UpdateHotkey(cbLanguageAlt, edtLanguage, '!', 'language'))
 
+    ;----------------------------------------------------------
+    ; TAB 2 — Commands
+    ;----------------------------------------------------------
     tab.UseTab(2)
 
     goo.AddText("x30 y+m", "Command:")
@@ -382,7 +385,7 @@ HotkeyCmdMicGui(defaultTab := 1) {
     lv1.ModifyCol(3, widthCol4)
 
     ;----------------------------------------------------------
-    ; TAB 2 — Microphone Settings
+    ; TAB 3 — Microphone Settings
     ;----------------------------------------------------------
     tab.UseTab(3)
 
@@ -405,7 +408,7 @@ HotkeyCmdMicGui(defaultTab := 1) {
     lv2.ModifyCol(2, 360)
 
     goo.AddButton('x+m yp h30', 'Save Microphone Settings').OnEvent('Click', SaveMicSettings)
-	goo.AddGroupBox('x20 y40 w650 h190', 'Microphone Selection')
+	goo.AddGroupBox('x20 y40 w700 h190', 'Microphone Selection')
 
     objTxtThreshold := goo.AddText('x30 y+m+20', 'Threshold: ')
     sliderThreshold := goo.AddSlider('x+m yp w400 Range0-100 TickInterval10 Line1 Page5', Round(fltConfidenceThreshold * 100))
@@ -415,21 +418,30 @@ HotkeyCmdMicGui(defaultTab := 1) {
     chkShowConfidence := goo.AddCheckbox('x30 y+m', 'Show confidence % in tooltips')
     chkShowConfidence.Value := blnShowConfidence ? 1 : 0
     chkShowConfidence.OnEvent('Click', OnShowConfidenceClick)
-    goo.AddGroupBox('x20 y235 w650 h120', 'SAPI Threshold and Confidence')
+    goo.AddGroupBox('x20 y235 w700 h120', 'SAPI Threshold and Confidence')
 
-    strWhisperBackend := IniRead(strIniFile, 'Settings', 'whisperBackend', 'local')
-    strApiKey         := IniRead(strIniFile, 'Settings', 'openaiApiKey',   '')
-    radWhisperLocal  := goo.AddRadio('x30 y+m+30 Group', 'Local  — faster-whisper, offline, free')
-    radWhisperOpenAI := goo.AddRadio('x30 y+m', 'OpenAI — GPT-4o Transcribe, cloud, $0.006/min')
-    radWhisperLocal.Value  := (strWhisperBackend = 'local')  ? 1 : 0
-    radWhisperOpenAI.Value := (strWhisperBackend = 'openai') ? 1 : 0
-    radWhisperLocal.OnEvent('Click',  OnWhisperBackendChange)
-    radWhisperOpenAI.OnEvent('Click', OnWhisperBackendChange)
-    goo.AddText('x30 y+m+10', 'OpenAI API Key (when choice for OpenAI):')
+    strDictateMode := IniRead(strIniFile, 'Settings', 'dictateMode', 'faster-whisper')
+    strApiKey := IniRead(strIniFile, 'Settings', 'openaiApiKey', '')
+
+	radDictateFW     := goo.AddRadio('x40 y+m+50 Group', 'faster-whisper: local, offline, free, 99+ languages')
+    radDictateOpenAI := goo.AddRadio('xp y+m',          'whisper-gpt-4o:  OpenAI cloud, $0.006/min, 99+ languages')
+    radDictateP2     := goo.AddRadio('xp y+m',          'Parakeet v2:     local, offline, free, English only')
+    radDictateP3     := goo.AddRadio('xp y+m',          'Parakeet v3:     local, offline, free, 25 languages')
+    radDictateFW.Value     := (strDictateMode = 'faster-whisper') ? 1 : 0
+    radDictateOpenAI.Value := (strDictateMode = 'whisper-gpt-4o') ? 1 : 0
+    radDictateP2.Value     := (strDictateMode = 'parakeet-v2')    ? 1 : 0
+    radDictateP3.Value     := (strDictateMode = 'parakeet-v3')    ? 1 : 0
+    radDictateFW.OnEvent('Click',     OnDictateModeChange)
+    radDictateOpenAI.OnEvent('Click', OnDictateModeChange)
+    radDictateP2.OnEvent('Click',     OnDictateModeChange)
+    radDictateP3.OnEvent('Click',     OnDictateModeChange)
+    goo.AddGroupBox('x30 y390 w600 h140', 'Choose Grammar')
+
+	goo.AddText('x30 y+m+10', 'OpenAI API Key (when choice for whisper-gpt-4o):')
     edtApiKey := goo.AddEdit('x+m yp w300 Background0x00F0F0', strApiKey)
-    edtApiKey.Enabled := (strWhisperBackend = 'openai')
-    goo.AddButton('x30 y+m w160 h30', 'Save Whisper Settings').OnEvent('Click', SaveWhisperSettings)
-    goo.AddGroupBox('x20 y365 w650 h180', 'Whisper Backend')
+    edtApiKey.Enabled := (strDictateMode = 'whisper-gpt-4o')
+    goo.AddButton('x30 y+m w160 h30', 'Save Dictate Settings').OnEvent('Click', SaveDictateSettings)
+    goo.AddGroupBox('x20 y365 w700 h270', 'Dictate Backend')
 
     tab.UseTab(0)											; close construction context
     tab.Value := defaultTab									; select correct tab
@@ -438,16 +450,11 @@ HotkeyCmdMicGui(defaultTab := 1) {
 
 UpdateHotkey(cb, edt, token, type) {
     LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
-	oldHotkey := IniRead(strIniFile, 'HotKeys', type)
-
-	newHotkey := oldHotkey
 	alreadyIn := InStr(edt.Value, token)
 	if (cb.Value) && !alreadyIn
 		edt.Value := token . edt.Value
 	else if !cb.Value && alreadyIn
 		edt.Value := StrReplace(edt.Value, token, '')
-
-    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 2)
 }
 
 /** @description HotkeyCmdMicGuiClose - Close handler: destroy GUI */
@@ -716,25 +723,46 @@ OnShowConfidenceClick(ctrl, *) {
     LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'ShowConfidence set to ' (blnShowConfidence ? 'ON' : 'OFF'), 2)
 }
 
-/** @description OnWhisperBackendChange - Enable/disable API key field based on backend selection */
-OnWhisperBackendChange(ctrl, *) {
-    global edtApiKey, radWhisperOpenAI
+/** @description OnDictateModeChange - Enable/disable API key field based on backend selection */
+OnDictateModeChange(ctrl, *) {
+    global edtApiKey, radDictateOpenAI
 
-    edtApiKey.Enabled := (radWhisperOpenAI.Value = 1)
+    edtApiKey.Enabled := (radDictateOpenAI.Value = 1)
 }
 
-/** @description SaveWhisperSettings - Save Whisper backend and API key to INI */
-SaveWhisperSettings(*) {
-    global strIniFile, radWhisperOpenAI, edtApiKey
+/** @description SaveDictateSettings - Save dictate backend and API key to INI */
+SaveDictateSettings(*) {
+    global strIniFile, radDictateFW, radDictateOpenAI, radDictateP2, radDictateP3, edtApiKey
 
-    strBackend := radWhisperOpenAI.Value ? 'openai' : 'local'
-    strKey     := Trim(edtApiKey.Value)
+    if (radDictateOpenAI.Value)
+        strMode := 'whisper-gpt-4o'
+    else if (radDictateP2.Value)
+        strMode := 'parakeet-v2'
+    else if (radDictateP3.Value)
+        strMode := 'parakeet-v3'
+    else
+        strMode := 'faster-whisper'
 
-    IniWrite(strBackend, strIniFile, 'Settings', 'whisperBackend')
-    IniWrite(strKey,     strIniFile, 'Settings', 'openaiApiKey')
+    strKey := Trim(edtApiKey.Value)
 
-    pool.ShowByMouse('Whisper settings saved. Press F3 twice to apply if Whisper is active.', 3000)
-    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Whisper backend set to ' strBackend, 2)
+    IniWrite(strMode, strIniFile, 'Settings', 'dictateMode')
+    IniWrite(strKey,  strIniFile, 'Settings', 'openaiApiKey')
+
+    pool.ShowByMouse('Dictate settings saved. Press F3 twice to apply if Dictate is active.', 3000)
+    LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Dictate mode set to ' strMode, 2)
+
+    ; If a Parakeet mode was selected, check whether model files are present
+    if (strMode = 'parakeet-v2' || strMode = 'parakeet-v3') {
+        strVersion  := (strMode = 'parakeet-v2') ? 'v2' : 'v3'
+        strSizeMB   := (strMode = 'parakeet-v2') ? '~640 MB' : '~650 MB'
+        strModelDir := A_ScriptDir '\models\parakeet\' strVersion
+        if (!FileExist(strModelDir '\tokens.txt')) {
+            intAnswer := MsgBox('Parakeet ' strVersion ' model files are not installed.`nDownload size: ' strSizeMB '`n`nDownload now?',
+                'Voice Command — Parakeet ' strVersion ' model missing', 'OKCancel Icon?')
+            if (intAnswer = 'OK')
+                Run('python "' A_ScriptDir '\python\download_parakeet.py" ' strVersion,, 'Show')
+        }
+    }
 }
 
 ;================= End of VC_UI.ahk =================

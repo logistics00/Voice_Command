@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Voice Command Bridge -- Vosk + Whisper + TCP server (Phase 2)
+Voice Command Bridge -- Vosk + Whisper + Parakeet + TCP server
 
 Communicates with Voice_Command.ahk via TCP on localhost:7891.
 
-Receives: MODE:vosk | MODE:whisper | MODE:sapi | MODE:pause | LANG:default | LANG:special | QUIT
+Receives: MODE:vosk | MODE:dictate | MODE:sapi | MODE:pause | LANG:default | LANG:special | QUIT
+          MODE:whisper is accepted as a backward-compatible alias for MODE:dictate
 Sends:    TEXT:<recognized text> | STATUS:<msg> | ERROR:<msg>
 
 Usage:
@@ -32,7 +33,7 @@ VAD_CHUNK   = 512    # 32ms at 16kHz -- minimum required by silero-vad
 VAD_THRESH  = 0.5    # speech probability threshold
 SILENCE_END = 17     # ~510ms of consecutive silent chunks -> end of utterance
 
-OPENAI_TRANSCRIBE_MODEL = "gpt-4o-transcribe"  # or "whisper-1"
+OPENAI_TRANSCRIBE_MODEL = "gpt-4o-transcribe"
 
 
 # ------------------------------------------------------------------
@@ -58,24 +59,25 @@ def load_ini(ini_path):
 
 class VoiceBridge:
     def __init__(self, ini_path):
-        self.ini_path     = ini_path
-        self.mode         = "sapi"      # sapi | vosk | whisper | pause
-        self.lang         = "default"   # default | special
-        self.special_lang = ""          # e.g. "nl" -- from INI localLanguage=
-        self.models       = {}          # {"default": Model, "special": Model}
-        self.recognizers  = {}          # {"default": KaldiRecognizer, ...}
-        self.whisper_model = None       # faster_whisper.whisperModel instance
-        self.whisper_size  = ""         # "small" | "medium"
-        self.vad_model     = None       # silero-vad torch model
+        self.ini_path            = ini_path
+        self.mode                = "sapi"       # sapi | vosk | dictate | pause
+        self.lang                = "default"    # default | special
+        self.special_lang        = ""           # e.g. "nl" -- from INI localLanguage=
+        self.models              = {}           # {"default": Model, "special": Model}
+        self.recognizers         = {}           # {"default": KaldiRecognizer, ...}
+        self.whisper_model       = None         # faster_whisper.WhisperModel instance
+        self.whisper_size        = ""           # "small" | "medium"
+        self.parakeet_recognizer = None         # sherpa_onnx.OfflineRecognizer instance
+        self.vad_model           = None         # silero-vad torch model
+        self.dictate_mode        = "faster-whisper"  # faster-whisper|whisper-gpt-4o|parakeet-v2|parakeet-v3
+        self.openai_api_key      = ""           # OpenAI API key for cloud transcription
         self.audio_queue         = queue.Queue()
         self.conn                = None
         self.conn_lock           = threading.Lock()
         self.stop_audio          = threading.Event()
         self.audio_thread        = None
         self.running             = True
-        self._whisper_requested  = False  # True while async load is pending
-        self.whisper_backend     = "local" # "local" | "openai"
-        self.openai_api_key      = ""      # OpenAI API key for cloud transcription
+        self._dictate_requested  = False        # True while async load is pending
 
     # --------------------------------------------------------------
     # Config & model loading
@@ -83,11 +85,16 @@ class VoiceBridge:
 
     def load_config(self):
         cfg = load_ini(self.ini_path)
-        self.special_lang    = cfg.get("Settings", "localLanguage",   fallback="").strip().lower()
-        self.whisper_backend = cfg.get("Settings", "whisperBackend",  fallback="local").strip().lower()
-        self.openai_api_key  = cfg.get("Settings", "openaiApiKey",    fallback="").strip()
-        logging.info("localLanguage setting: '%s'", self.special_lang or "(none)")
-        logging.info("Whisper backend: %s", self.whisper_backend)
+        self.special_lang   = cfg.get("Settings", "localLanguage", fallback="").strip().lower()
+
+        dictate_mode = cfg.get("Settings", "dictateMode", fallback="faster-whisper").strip().lower()
+        if not dictate_mode:
+            dictate_mode = "faster-whisper"
+
+        self.dictate_mode   = dictate_mode
+        self.openai_api_key = cfg.get("Settings", "openaiApiKey", fallback="").strip()
+        logging.info("localLanguage: '%s'", self.special_lang or "(none)")
+        logging.info("dictateMode: %s", self.dictate_mode)
 
     def load_models(self):
         base = os.path.normpath(
@@ -115,22 +122,28 @@ class VoiceBridge:
         else:
             logging.info("No local language (LL) model found at: %s", lang_path)
 
-    def load_whisper(self):
-        """Load Whisper backend and silero-vad. Backend is local (faster-whisper) or openai."""
+    def load_dictate_backend(self):
+        """Load the selected dictate backend and silero-vad."""
         import torch
+
         cfg = load_ini(self.ini_path)
 
-        # Re-read backend settings so a GUI change takes effect without bridge restart
-        self.whisper_backend = cfg.get("Settings", "whisperBackend", fallback="local").strip().lower()
-        self.openai_api_key  = cfg.get("Settings", "openaiApiKey",   fallback="").strip()
+        # Re-read settings so a GUI change takes effect without bridge restart
+        dictate_mode = cfg.get("Settings", "dictateMode", fallback="faster-whisper").strip().lower()
+        if not dictate_mode:
+            dictate_mode = "faster-whisper"
+        self.dictate_mode   = dictate_mode
+        self.openai_api_key = cfg.get("Settings", "openaiApiKey", fallback="").strip()
 
-        if self.whisper_backend == "openai":
+        logging.info("Loading dictate backend: %s", self.dictate_mode)
+
+        if self.dictate_mode == "whisper-gpt-4o":
             if not self.openai_api_key:
                 self.send("ERROR:OpenAI API key missing. Set openaiApiKey in INI.")
                 return
-            logging.info("Whisper backend: OpenAI (%s)", OPENAI_TRANSCRIBE_MODEL)
-        else:
-            # local: load faster-whisper model
+            logging.info("Dictate backend: OpenAI (%s)", OPENAI_TRANSCRIBE_MODEL)
+
+        elif self.dictate_mode == "faster-whisper":
             from faster_whisper import WhisperModel
 
             ini_size = cfg.get("Settings", "whisperModel", fallback="").strip().lower()
@@ -139,13 +152,10 @@ class VoiceBridge:
                 logging.info("Whisper model size: %s (INI override)", self.whisper_size)
             else:
                 import psutil
-                ram_bytes = psutil.virtual_memory().total
-                ram_gb    = ram_bytes / (1024 ** 3)
+                ram_gb = psutil.virtual_memory().total / (1024 ** 3)
                 self.whisper_size = "medium" if ram_gb >= 24 else "small"
-                logging.info(
-                    "Whisper model size: %s (RAM: %.1fGB detected)",
-                    self.whisper_size, ram_gb
-                )
+                logging.info("Whisper model size: %s (RAM: %.1fGB detected)",
+                             self.whisper_size, ram_gb)
 
             logging.info("Loading faster-whisper model '%s' (CPU, int8)...", self.whisper_size)
             self.whisper_model = WhisperModel(
@@ -153,7 +163,89 @@ class VoiceBridge:
             )
             logging.info("faster-whisper model loaded.")
 
-        # Load silero-vad (needed for both backends to detect end-of-utterance)
+        elif self.dictate_mode in ("parakeet-v2", "parakeet-v3"):
+            import sherpa_onnx
+
+            version   = "v2" if self.dictate_mode == "parakeet-v2" else "v3"
+            model_dir = os.path.normpath(os.path.join(
+                os.path.dirname(os.path.abspath(__file__)),
+                "..", "models", "parakeet", version
+            ))
+
+            # Support both plain and INT8-quantised file names
+            def _find(base_name):
+                for name in (base_name + ".int8.onnx", base_name + ".onnx"):
+                    p = os.path.join(model_dir, name)
+                    if os.path.isfile(p):
+                        return p
+                return None
+
+            encoder = _find("encoder")
+            decoder = _find("decoder")
+            joiner  = _find("joiner")
+            tokens  = os.path.join(model_dir, "tokens.txt")
+
+            missing = [n for n, p in
+                       [("encoder", encoder), ("decoder", decoder),
+                        ("joiner", joiner), ("tokens.txt", tokens if os.path.isfile(tokens) else None)]
+                       if p is None]
+            if missing:
+                import ctypes
+                size_mb = "~640 MB" if version == "v2" else "~650 MB"
+                self.send("STATUS:parakeet_download_prompt")
+                logging.info("Showing Parakeet download dialog for %s (missing: %s)", version, missing)
+                answer = ctypes.windll.user32.MessageBoxW(
+                    0,
+                    f"Parakeet {version} model files are not installed.\n"
+                    f"Download size: {size_mb}\n\n"
+                    f"Download now?",
+                    f"Voice Command \u2014 Parakeet {version} model missing",
+                    0x40001,  # MB_OKCANCEL | MB_TOPMOST
+                )
+                logging.info("User download dialog answer: %s", "OK" if answer == 1 else "Cancel")
+                if answer != 1:  # 1 = OK, 2 = Cancel
+                    raise FileNotFoundError(
+                        f"Parakeet {version} model files missing in {model_dir}: {missing}"
+                    )
+                self.send("STATUS:parakeet_downloading")
+                from download_parakeet import download_version
+                models_root = os.path.normpath(os.path.join(
+                    os.path.dirname(os.path.abspath(__file__)), "..", "models"
+                ))
+                download_version(version, models_root)
+                # Re-scan after download
+                encoder = _find("encoder")
+                decoder = _find("decoder")
+                joiner  = _find("joiner")
+                tokens  = os.path.join(model_dir, "tokens.txt")
+                still_missing = [n for n, p in
+                    [("encoder", encoder), ("decoder", decoder),
+                     ("joiner", joiner), ("tokens.txt", tokens if os.path.isfile(tokens) else None)]
+                    if p is None]
+                if still_missing:
+                    raise FileNotFoundError(
+                        f"Parakeet {version} download incomplete, still missing: {still_missing}"
+                    )
+
+            logging.info("Loading Parakeet %s from %s ...", version, model_dir)
+            self.parakeet_recognizer = sherpa_onnx.OfflineRecognizer.from_transducer(
+                encoder=encoder,
+                decoder=decoder,
+                joiner=joiner,
+                tokens=tokens,
+                num_threads=4,
+                sample_rate=SAMPLE_RATE,
+                feature_dim=80,
+                decoding_method="greedy_search",
+                model_type="nemo_transducer",
+            )
+            logging.info("Parakeet %s loaded.", version)
+
+        else:
+            self.send(f"ERROR:Unknown dictateMode: {self.dictate_mode}")
+            return
+
+        # Load silero-vad (needed for all backends to detect end-of-utterance)
         logging.info("Loading silero-vad...")
         self.vad_model, _ = torch.hub.load(
             repo_or_dir="snakers4/silero-vad",
@@ -165,7 +257,7 @@ class VoiceBridge:
         self.vad_model.eval()
         logging.info("silero-vad loaded.")
 
-        self.send("STATUS:whisper_ready")
+        self.send("STATUS:dictate_ready")
 
     def _transcribe_openai(self, audio_np, lang_code):
         """Send audio to OpenAI Transcriptions API and return the transcribed text."""
@@ -177,11 +269,10 @@ class VoiceBridge:
             self.send("ERROR:openai package not installed. Run: pip install openai")
             return ""
 
-        # Convert float32 16kHz mono numpy array to WAV bytes in memory
         wav_io = io.BytesIO()
         with wave.open(wav_io, "wb") as wf:
             wf.setnchannels(1)
-            wf.setsampwidth(2)          # int16 = 2 bytes
+            wf.setsampwidth(2)
             wf.setframerate(SAMPLE_RATE)
             pcm = (audio_np * 32767).astype("int16")
             wf.writeframes(pcm.tobytes())
@@ -220,37 +311,42 @@ class VoiceBridge:
         logging.info("CMD: %s", line)
 
         if line == "MODE:vosk":
-            self._whisper_requested = False
+            self._dictate_requested = False
             self.mode = "vosk"
             self._start_audio()
             self.send("STATUS:mode_vosk")
 
-        elif line == "MODE:whisper":
-            # Re-read backend from INI so a settings change takes effect without restart
+        elif line in ("MODE:dictate", "MODE:whisper"):   # MODE:whisper = backward-compat alias
             cfg = load_ini(self.ini_path)
-            new_backend = cfg.get("Settings", "whisperBackend", fallback="local").strip().lower()
-            if new_backend != self.whisper_backend:
-                self.whisper_model   = None
-                self.vad_model       = None
-                self.whisper_backend = new_backend
+            dictate_mode = cfg.get("Settings", "dictateMode", fallback="faster-whisper").strip().lower()
+            if not dictate_mode:
+                dictate_mode = "faster-whisper"
+
+            # If backend changed, reset loaded models
+            if dictate_mode != self.dictate_mode:
+                self.whisper_model       = None
+                self.parakeet_recognizer = None
+                self.vad_model           = None
+                self.dictate_mode        = dictate_mode
+
             if self.vad_model is None:
-                self._whisper_requested = True
-                self.send("STATUS:whisper_loading")
-                threading.Thread(target=self._load_whisper_async, daemon=True).start()
+                self._dictate_requested = True
+                self.send("STATUS:dictate_loading")
+                threading.Thread(target=self._load_dictate_async, daemon=True).start()
             else:
-                self._whisper_requested = False
-                self.mode = "whisper"
+                self._dictate_requested = False
+                self.mode = "dictate"
                 self._start_audio()
-                self.send("STATUS:mode_whisper")
+                self.send("STATUS:mode_dictate")
 
         elif line == "MODE:sapi":
-            self._whisper_requested = False
+            self._dictate_requested = False
             self.mode = "sapi"
             self._stop_audio()
             self.send("STATUS:mode_sapi")
 
         elif line == "MODE:pause":
-            self._whisper_requested = False
+            self._dictate_requested = False
             self.mode = "pause"
             self._stop_audio()
             self.send("STATUS:mode_pause")
@@ -281,26 +377,25 @@ class VoiceBridge:
             self._stop_audio()
 
     # --------------------------------------------------------------
-    # Audio capture, Vosk recognition, Whisper VAD pipeline
+    # Audio capture, Vosk recognition, Dictate VAD pipeline
     # --------------------------------------------------------------
 
-    def _load_whisper_async(self):
-        """Load Whisper and VAD in a background thread; activate whisper mode when ready."""
+    def _load_dictate_async(self):
+        """Load dictate backend and VAD in a background thread; activate dictate mode when ready."""
         try:
-            self.load_whisper()
-            if not self._whisper_requested:
-                # User switched away while loading -- stay in current mode
-                logging.info("Whisper loaded but mode was cancelled; staying in '%s'.", self.mode)
-                self.send("STATUS:whisper_ready")
+            self.load_dictate_backend()
+            if not self._dictate_requested:
+                logging.info("Dictate backend loaded but mode was cancelled; staying in '%s'.", self.mode)
+                self.send("STATUS:dictate_ready")
                 return
-            self._whisper_requested = False
-            self.mode = "whisper"
+            self._dictate_requested = False
+            self.mode = "dictate"
             self._start_audio()
-            self.send("STATUS:mode_whisper")
+            self.send("STATUS:mode_dictate")
         except Exception as exc:
-            logging.error("Whisper/VAD load failed: %s", exc)
-            self._whisper_requested = False
-            self.send(f"ERROR:Whisper load failed: {exc}")
+            logging.error("Dictate backend load failed: %s", exc)
+            self._dictate_requested = False
+            self.send(f"ERROR:Dictate backend load failed: {exc}")
 
     def _start_audio(self):
         """Start audio capture thread if not already running."""
@@ -322,17 +417,14 @@ class VoiceBridge:
         logging.info("Audio stop signaled.")
 
     def _audio_loop(self):
-        """Capture audio and route to Vosk or Whisper+VAD depending on self.mode."""
+        """Capture audio and route to Vosk or Dictate+VAD depending on self.mode."""
         import sys
         import numpy as np
 
-        # Stage 1: sounddevice import triggers PortAudio device enumeration, which can
-        # hang indefinitely when a Bluetooth headset is asleep. Import in a thread with
-        # a 10-second timeout. On timeout the user can wake the headset and press F3 again.
         if "sounddevice" not in sys.modules:
             _sd_ready = threading.Event()
             def _import_sd():
-                import sounddevice  # noqa: F401 -- populates sys.modules
+                import sounddevice  # noqa: F401
                 _sd_ready.set()
             threading.Thread(target=_import_sd, daemon=True).start()
             if not _sd_ready.wait(timeout=10):
@@ -341,12 +433,9 @@ class VoiceBridge:
                 return
         import sounddevice as sd
 
-        # Stage 2: opening RawInputStream negotiates with the audio device, which also
-        # hangs when a Bluetooth headset is asleep. Open in a thread with a 10-second timeout.
-
-        # Whisper VAD state
-        speech_buffer  = []   # accumulated bytes for one utterance
-        vad_remainder  = b""  # leftover bytes between sounddevice blocks
+        # Dictate VAD state
+        speech_buffer  = []
+        vad_remainder  = b""
         in_speech      = False
         silence_chunks = 0
 
@@ -393,7 +482,6 @@ class VoiceBridge:
 
                 # ---- VOSK branch ----
                 if self.mode == "vosk":
-                    # Reset Whisper VAD state when switching modes
                     speech_buffer  = []
                     vad_remainder  = b""
                     in_speech      = False
@@ -409,24 +497,25 @@ class VoiceBridge:
                             logging.info("TEXT (vosk): %s", text)
                             self.send(f"TEXT:{text}")
 
-                # ---- WHISPER branch ----
-                elif self.mode == "whisper":
-                    import torch  # lazy: only needed for VAD; cached after first import
+                # ---- DICTATE branch (faster-whisper | whisper-gpt-4o | parakeet-v2/v3) ----
+                elif self.mode == "dictate":
+                    import torch
                     if self.vad_model is None:
                         continue
-                    if self.whisper_backend == "local" and self.whisper_model is None:
+                    if self.dictate_mode == "faster-whisper" and self.whisper_model is None:
+                        continue
+                    if self.dictate_mode == "whisper-gpt-4o" and not self.openai_api_key:
+                        continue
+                    if self.dictate_mode.startswith("parakeet") and self.parakeet_recognizer is None:
                         continue
 
-                    # Combine leftover from previous block with new data
                     raw    = vad_remainder + data
                     offset = 0
 
-                    # Process in 480-sample (30ms) VAD chunks
                     while offset + VAD_CHUNK * 2 <= len(raw):
                         chunk_bytes = raw[offset : offset + VAD_CHUNK * 2]
                         offset     += VAD_CHUNK * 2
 
-                        # Convert int16 bytes -> float32 tensor for silero-vad
                         chunk_np     = np.frombuffer(chunk_bytes, dtype=np.int16) \
                                          .astype(np.float32) / 32768.0
                         chunk_tensor = torch.from_numpy(chunk_np)
@@ -441,23 +530,27 @@ class VoiceBridge:
 
                         elif in_speech:
                             silence_chunks += 1
-                            speech_buffer.append(chunk_bytes)  # include trailing audio
+                            speech_buffer.append(chunk_bytes)
 
                             if silence_chunks >= SILENCE_END:
-                                # End of utterance -- send to Whisper
                                 audio_bytes = b"".join(speech_buffer)
                                 audio_np    = np.frombuffer(audio_bytes, dtype=np.int16) \
                                                 .astype(np.float32) / 32768.0
 
-                                if self.lang == "special":
-                                    lang_code = self.special_lang
-                                else:
-                                    lang_code = "en"
+                                lang_code = self.special_lang if self.lang == "special" else "en"
 
-                                if self.whisper_backend == "openai":
-                                    text = self._transcribe_openai(audio_np, lang_code)
-                                else:
-                                    try:
+                                text = ""
+                                try:
+                                    if self.dictate_mode.startswith("parakeet"):
+                                        stream = self.parakeet_recognizer.create_stream()
+                                        stream.accept_waveform(SAMPLE_RATE, audio_np)
+                                        self.parakeet_recognizer.decode_stream(stream)
+                                        text = stream.result.text.strip()
+
+                                    elif self.dictate_mode == "whisper-gpt-4o":
+                                        text = self._transcribe_openai(audio_np, lang_code)
+
+                                    else:  # faster-whisper
                                         segments, _ = self.whisper_model.transcribe(
                                             audio_np,
                                             language=lang_code,
@@ -466,19 +559,19 @@ class VoiceBridge:
                                         text = " ".join(
                                             seg.text.strip() for seg in segments
                                         ).strip()
-                                    except Exception as exc:
-                                        logging.error("Whisper transcribe error: %s", exc)
-                                        text = ""
+
+                                except Exception as exc:
+                                    logging.error("Dictate transcribe error: %s", exc)
 
                                 if text:
-                                    logging.info("TEXT (whisper): %s", text)
+                                    logging.info("TEXT (dictate/%s): %s", self.dictate_mode, text)
                                     self.send(f"TEXT:{text}")
 
                                 speech_buffer  = []
                                 in_speech      = False
                                 silence_chunks = 0
 
-                    vad_remainder = raw[offset:]  # save unprocessed bytes
+                    vad_remainder = raw[offset:]
 
         except Exception as exc:
             logging.error("Audio loop error: %s", exc)
@@ -555,6 +648,11 @@ def main():
         sys.exit(1)
 
     log_file = os.path.join(os.path.dirname(os.path.abspath(ini_path)), "bridge.log")
+    try:
+        if os.path.isfile(log_file):
+            os.remove(log_file)
+    except OSError:
+        pass  # File locked by a previous process; will be overwritten
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(message)s",

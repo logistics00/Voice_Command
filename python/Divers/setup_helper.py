@@ -178,7 +178,7 @@ def step_packages():
         if not ok:
             errors.append("torch")
 
-    for pkg in ["silero-vad", "vosk", "faster-whisper", "sounddevice", "psutil"]:
+    for pkg in ["silero-vad", "vosk", "faster-whisper", "sounddevice", "psutil", "openai", "sherpa-onnx", "huggingface_hub"]:
         ok = install_package(pkg, [sys.executable, "-m", "pip", "install", pkg])
         if not ok:
             errors.append(pkg)
