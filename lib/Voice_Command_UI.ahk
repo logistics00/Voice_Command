@@ -303,7 +303,7 @@ HotkeyCmdMicGui(defaultTab := 1) {
     global cbListeningAlt := goo.AddCheckbox((InStr(strHotkey, '!') ? 'x+m yp Checked' : 'x+m yp'), 'Alt')
     goo.AddText('x+m yp', 'Resulting HotKey:')
     global edtListening := goo.AddEdit('x+m yp w150 Background0x00F0F0', strHotkey)
-    goo.AddButton('x+m yp h25', 'Reset').OnEvent('Click', (*) => UpdateHotkeyEdtField(edtListening, 'listening'))
+    goo.AddButton('x+m yp h25', 'Save Hotkey').OnEvent('Click', (*) => UpdateHotkeyEdtField(edtListening, 'listening'))
     cbListeningWin.OnEvent('Click', (*) => UpdateHotkey(cbListeningWin, edtListening, '#', 'listening'))
     cbListeningCtrl.OnEvent('Click', (*) => UpdateHotkey(cbListeningCtrl, edtListening, '^', 'listening'))
     cbListeningShift.OnEvent('Click', (*) => UpdateHotkey(cbListeningShift, edtListening, '+', 'listening'))
@@ -316,7 +316,7 @@ HotkeyCmdMicGui(defaultTab := 1) {
     global cbMainGuiAlt := goo.AddCheckbox((InStr(strHotkey, '!') ? 'x+m yp Checked' : 'x+m yp'), 'Alt')
     goo.AddText('x+m yp', 'Resulting HotKey:')
     global edtMainGui := goo.AddEdit('x+m yp w150 Background0x00F0F0', strHotkey)
-    goo.AddButton('x+m yp h25', 'Reset').OnEvent('Click', (*) => UpdateHotkeyEdtField(edtMainGui, 'mainGui'))
+    goo.AddButton('x+m yp h25', 'Save Hotkey').OnEvent('Click', (*) => UpdateHotkeyEdtField(edtMainGui, 'mainGui'))
     cbMainGuiWin.OnEvent('Click', (*) => UpdateHotkey(cbMainGuiWin, edtMainGui, '#', 'mainGui'))
     cbMainGuiCtrl.OnEvent('Click', (*) => UpdateHotkey(cbMainGuiCtrl, edtMainGui, '^', 'mainGui'))
     cbMainGuiShift.OnEvent('Click', (*) => UpdateHotkey(cbMainGuiShift, edtMainGui, '+', 'mainGui'))
@@ -329,7 +329,7 @@ HotkeyCmdMicGui(defaultTab := 1) {
     global cbModusAlt := goo.AddCheckbox((InStr(strHotkey, '!') ? 'x+m yp Checked' : 'x+m yp'), 'Alt')
     goo.AddText('x+m yp', 'Resulting HotKey:')
     global edtModus := goo.AddEdit('x+m yp w150 Background0x00F0F0', strHotkey)
-    goo.AddButton('x+m yp h25', 'Reset').OnEvent('Click', (*) => UpdateHotkeyEdtField(edtModus, 'modus'))
+    goo.AddButton('x+m yp h25', 'Save Hotkey').OnEvent('Click', (*) => UpdateHotkeyEdtField(edtModus, 'modus'))
     cbModusWin.OnEvent('Click', (*) => UpdateHotkey(cbModusWin, edtModus, '#', 'modus'))
     cbModusCtrl.OnEvent('Click', (*) => UpdateHotkey(cbModusCtrl, edtModus, '^', 'modus'))
     cbModusShift.OnEvent('Click', (*) => UpdateHotkey(cbModusShift, edtModus, '+', 'modus'))
@@ -342,7 +342,7 @@ HotkeyCmdMicGui(defaultTab := 1) {
     global cbLanguageAlt := goo.AddCheckbox((InStr(strHotkey, '!') ? 'x+m yp Checked' : 'x+m yp'), 'Alt')
     goo.AddText('x+m yp', 'Resulting HotKey:')
     global edtLanguage := goo.AddEdit('x+m yp w150 Background0x00F0F0', strHotkey)
-    goo.AddButton('x+m yp h25', 'Reset').OnEvent('Click', (*) => UpdateHotkeyEdtField(edtLanguage, 'language'))
+    goo.AddButton('x+m yp h25', 'Save Hotkey').OnEvent('Click', (*) => UpdateHotkeyEdtField(edtLanguage, 'language'))
     cbLanguageWin.OnEvent('Click', (*) => UpdateHotkey(cbLanguageWin, edtLanguage, '#', 'language'))
     cbLanguageCtrl.OnEvent('Click', (*) => UpdateHotkey(cbLanguageCtrl, edtLanguage, '^', 'language'))
     cbLanguageShift.OnEvent('Click', (*) => UpdateHotkey(cbLanguageShift, edtLanguage, '+', 'language'))
@@ -453,10 +453,38 @@ UpdateHotkey(cb, edt, token, type) {
 		edt.Value := StrReplace(edt.Value, token, '')
 }
 
-/** @description HotkeyCmdMicGuiClose - Close handler: destroy GUI */
+/** @description HotkeyCmdMicGuiClose - Close handler: check for unsaved hotkey changes, then destroy GUI */
 HotkeyCmdMicGuiClose(*) {
     LogMsg(FFL('VC_UI', A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global goo
+    global goo, strIniFile
+    global edtListening, edtMainGui, edtModus, edtLanguage
+
+    ; Compare each edit field to the saved INI value
+    strIniListening := IniRead(strIniFile, 'HotKeys', 'listening')
+    strIniMainGui   := IniRead(strIniFile, 'HotKeys', 'mainGui')
+    strIniModus     := IniRead(strIniFile, 'HotKeys', 'modus')
+    strIniLanguage  := IniRead(strIniFile, 'HotKeys', 'language')
+
+    blnChanged := (edtListening.Value != strIniListening)
+               || (edtMainGui.Value   != strIniMainGui)
+               || (edtModus.Value     != strIniModus)
+               || (edtLanguage.Value  != strIniLanguage)
+
+    if (blnChanged) {
+        intResult := MsgBox('You have unsaved changes — Save or Discard?', 'Unsaved Changes', 'YesNo Icon? Default1')
+        ; Yes = Save, No = Discard
+        if (intResult = 'Yes') {
+            if (edtListening.Value != strIniListening)
+                UpdateHotkeyEdtField(edtListening, 'listening')
+            if (edtMainGui.Value != strIniMainGui)
+                UpdateHotkeyEdtField(edtMainGui, 'mainGui')
+            if (edtModus.Value != strIniModus)
+                UpdateHotkeyEdtField(edtModus, 'modus')
+            if (edtLanguage.Value != strIniLanguage)
+                UpdateHotkeyEdtField(edtLanguage, 'language')
+        }
+    }
+
     goo.Destroy()
     goo := ""
 }
