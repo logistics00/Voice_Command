@@ -7,9 +7,8 @@
 ; INITIALIZATION
 ;============================================================
 
-/** @description InitializeVoiceRecognition - Set up SAPI voice recognition with TWO grammars
-    @details - Creates main grammar for user commands
-             - Creates control grammar for start/stop (always active) */
+/** @description InitializeVoiceRecognition - Set up SAPI voice recognition
+    @details - Creates main grammar for user commands and built-in commands */
 InitializeVoiceRecognition() {
     LogMsg(FFL('VC_Core', A_ThisFunc, A_LineNumber) . 'Started', 1)
     global objRecognizer, objContext, objGrammar, objEventSink
@@ -176,11 +175,11 @@ BuildGrammarFile(mapUserCmds, mapBuiltIn, strFilePath) {
     strXml .= '<L>'
 
     for strPhrase, strAction in mapBuiltIn {
-        strXml .= "<P>" strPhrase "</P>"
+        strXml .= "<P>" XmlEscape(strPhrase) "</P>"
     }
 
     for strPhrase, strAction in mapUserCmds {
-        strXml .= "<P>" strPhrase "</P>"
+        strXml .= "<P>" XmlEscape(strPhrase) "</P>"
     }
 
     strXml .= "</L>"
@@ -194,6 +193,18 @@ BuildGrammarFile(mapUserCmds, mapBuiltIn, strFilePath) {
     LogMsg(FFL('VC_Core', A_ThisFunc, A_LineNumber) . "Grammar built with " (mapBuiltIn.Count + mapUserCmds.Count) " commands", 2)
 }
 
+/** @description XmlEscape - Escape special XML characters in a string
+    @param {string} str - Raw string to escape
+    @returns {string}   - XML-safe string */
+XmlEscape(str) {
+    str := StrReplace(str, '&',  '&amp;')
+    str := StrReplace(str, '<',  '&lt;')
+    str := StrReplace(str, '>',  '&gt;')
+    str := StrReplace(str, '"',  '&quot;')
+    str := StrReplace(str, "'",  '&apos;')
+    return str
+}
+
 /** @description RebuildGrammar - Rebuild Grammar After Command Changes */
 RebuildGrammar() {
     LogMsg(FFL('VC_Core', A_ThisFunc, A_LineNumber) . 'Started', 1)
@@ -204,7 +215,7 @@ RebuildGrammar() {
         objGrammar.CmdSetRuleState("cmd", 0)
 
         ; Build new grammar file
-        strTempFile := A_Temp "\voice_grammar.xml"
+        strTempFile := A_Temp "\voice_grammar_main.xml"
         BuildGrammarFile(mapCommands, mapBuiltInCommands, strTempFile)
 
         ; Reload grammar
@@ -229,7 +240,7 @@ RebuildGrammar() {
 class VoiceEventSink {
 
     __Call(strMethod, args) {
-        if (strMethod != "Interference") {
+        if (strMethod != "Interference" && strMethod != "AudioLevel" && strMethod != "StartStream") {
             LogMsg(FFL('VC_Core', A_ThisFunc, A_LineNumber) . "Event: " strMethod " (" args.Length " args)", 2)
         }
 
@@ -270,7 +281,7 @@ class VoiceEventSink {
                         try {
                             fltConfidence := objPhraseInfo.Elements.Item(0).EngineConfidence
                         } catch {
-                            fltConfidence := 1.0  ; Assume high confidence if can't retrieve
+                            fltConfidence := fltConfidenceThreshold  ; Use threshold as safe fallback
                         }
                     }
 
