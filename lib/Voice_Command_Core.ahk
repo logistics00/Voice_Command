@@ -446,7 +446,7 @@ ExecuteAction(strActionData) {
         case "builtin":
             switch strTarget {
                 case "listcommands":
-                    ShowCommandList()
+                    HotkeyCmdMicGui(2)
             }
 
         case "function":
@@ -504,33 +504,6 @@ ExecuteMouseAction(strTarget) {
     } else {
         LogMsg(FFL('VC_Core', A_ThisFunc, A_LineNumber) . "Unknown mouse action: " strTarget, 4)
     }
-}
-
-/** @description ShowCommandList - Display a message box listing all available commands */
-ShowCommandList() {
-    LogMsg(FFL('VC_Core', A_ThisFunc, A_LineNumber) . 'Started', 1)
-    global mapCommands, mapBuiltInCommands
-
-    strList := "=== BUILT-IN COMMANDS ===`n"
-    for strPhrase, strAction in mapBuiltInCommands {
-        strList .= "`u{2022} " strPhrase "`n"
-    }
-
-    strList .= "`n=== USER COMMANDS ===`n"
-    for strPhrase, strAction in mapCommands {
-        arrayParts := StrSplit(strAction, "|", , 2)
-        if (arrayParts.Length >= 2) {
-            strType := arrayParts[1]
-        } else {
-            strType := "?"
-        }
-        strList .= "`u{2022} " strPhrase " [" strType "]`n"
-    }
-
-    strList .= "`nTotal: " mapCommands.Count " user commands"
-
-    MsgBox(strList, "Voice Commands", "Iconi")
-    LogMsg(FFL('VC_Core', A_ThisFunc, A_LineNumber) . "Listed commands", 2)
 }
 
 ;================= End of VC_Core.ahk =================
